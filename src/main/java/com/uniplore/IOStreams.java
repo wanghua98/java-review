@@ -1,4 +1,6 @@
-import entity.Employee;
+package com.uniplore;
+
+import com.uniplore.entity.Employee;
 
 import java.io.*;
 import java.nio.charset.StandardCharsets;

@@ -1,12 +1,9 @@
+package com.uniplore;
+
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.List;
 
 
-//用于过java基础语法
+//用于过java基础语法了解
 public class Main {
     public static void main(String[] args) throws IOException {
         //基本数据类型
@@ -27,7 +24,7 @@ public class Main {
         System.out.println("CM_PER_INCH:" + CM_PER_INCH);
 
         //枚举类型
-        enum Size { SMALL, MEDIUM, LARGE, EXTRA_LARGE };
+        enum Size { SMALL, MEDIUM, LARGE, EXTRA_LARGE }
         Size s = Size.MEDIUM;
         System.out.println("s:" + s);
 

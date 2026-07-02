@@ -1,4 +1,4 @@
-package Features_of_Java8;
+package com.uniplore.Features_of_Java8;
 
 
 import org.junit.Test;
@@ -14,13 +14,12 @@ public class Main {
 
     public static void main(String[] args) {
 
-        /**
-         *
-         * Lambda  (parameters)->expersion
-         * 可选类型声明：不需要声明参数类型，编译器可以统一识别参数值。
-         * 可选的参数圆括号：一个参数无需定义圆括号，但多个参数需要定义圆括号。
-         * 可选的大括号：如果主体包含了一个语句，就不需要使用大括号。
-         * 可选的返回关键字：如果主体只有一个表达式返回值则编译器会自动返回值，大括号需要指定明表达式返回了一个数值。
+        /*
+          Lambda  (parameters)->expression
+          可选类型声明：不需要声明参数类型，编译器可以统一识别参数值。
+          可选的参数圆括号：一个参数无需定义圆括号，但多个参数需要定义圆括号。
+          可选的大括号：如果主体包含了一个语句，就不需要使用大括号。
+          可选的返回关键字：如果主体只有一个表达式返回值则编译器会自动返回值，大括号需要指定明表达式返回了一个数值。
          */
 
 
@@ -86,6 +85,33 @@ public class Main {
     interface GreetingService {
         void sayMessage(String message);
     }
+
+    /*
+     * Lambda表达式在线程创建中使用
+     */
+    @Test
+    public void test1() {
+        var t = new Thread(r);
+        t.start();
+
+        //等待线程t结束
+        try {
+            t.join();
+        } catch (InterruptedException e) {
+            System.out.println("com.uniplore.Main thread interrupted.");
+        }
+    }
+
+    Runnable r = () -> {
+        for (int i = 0; i < 10; i++) {
+            System.out.println(i);
+            try {
+                Thread.sleep(10);
+            } catch (Exception e) {
+                System.out.println("Thread interrupted.");
+            }
+        }
+    };
 
     private int operate(int a, int b, MathOperation mathOperation) {
         return mathOperation.operation(a, b);

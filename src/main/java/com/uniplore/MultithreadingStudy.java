@@ -1,3 +1,5 @@
+package com.uniplore;
+
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -164,7 +166,7 @@ public class MultithreadingStudy {
         try {
             executor.awaitTermination(5, java.util.concurrent.TimeUnit.SECONDS);
         } catch (InterruptedException e) {
-            e.printStackTrace();
+            System.out.println("线程池关闭");
         }
         System.out.println();
     }

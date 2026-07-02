@@ -14,7 +14,6 @@ public class Employee {
     private int month;
     private int day;
 
-
     public LocalDate getHireDate() {
         return LocalDate.of(this.year, this.month, this.day);
     }

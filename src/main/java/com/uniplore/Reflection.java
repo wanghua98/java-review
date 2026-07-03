@@ -7,6 +7,13 @@ import java.lang.reflect.*;
 import java.util.Random;
 import java.util.Scanner;
 
+
+/*
+反射机制使人们可以在运行时查看字段和方法， 从而能编写出极具通用性的程序。这种
+功能对于系统编程极其有用，但是通常并不适合编写应用程序。反射很脆弱，如果使用反
+射. 编译器将无法帮助你查找编程错误，直到运行时才会发现错误并导致异常。
+ */
+
 public class Reflection {
 
     public static void main(String[] args) throws ClassNotFoundException, NoSuchMethodException, InvocationTargetException, InstantiationException, IllegalAccessException {

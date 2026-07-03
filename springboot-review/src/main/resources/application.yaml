@@ -1,0 +1,18 @@
+spring:
+  application:
+    name: springboot-review
+
+  # 数据库配置
+  datasource:
+    url: jdbc:mysql://localhost:3306/myapp?useSSL=false&serverTimezone=UTC
+    username: myuser
+    password: mypass123
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      password: redis123
+
+
+
+

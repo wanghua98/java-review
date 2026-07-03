@@ -35,6 +35,12 @@ public class Reflection {
         Class cl5 = Class.forName(className);
         Object obj = cl5.getConstructor().newInstance();
 
+        int[] arr = new int[10];
+        int firstElement = Array.getInt(arr, 0);
+
+        System.out.println(firstElement);
+        System.out.println(arr[0]);
+
 
     }
 
@@ -58,7 +64,7 @@ class ReflectionTesti {
             System.out.println("Enter class name (e.g., java.util.Date): ");
             name = in.next();
         }
-        
+
         // 通过类名加载 Class 对象
         Class cl = Class.forName(name);
         // 获取并打印类的修饰符（如 public、final 等）
@@ -66,12 +72,12 @@ class ReflectionTesti {
         if (modifiers.length() > 0) {
             System.out.print(modifiers + " ");
         }
-        
+
         // 判断是否为 sealed 类（Java 17+ 特性）
         if (cl.isSealed()) {
             System.out.print(" sealed ");
         }
-        
+
         // 判断并打印类的类型（enum、record、interface 或 class）
         if (cl.isEnum()) {
             System.out.print("enum " + name);
@@ -82,13 +88,12 @@ class ReflectionTesti {
         } else {
             System.out.print("class " + name);
         }
-        
+
         // 获取并打印父类信息
         Class supercl = cl.getSuperclass();
         if (supercl != null && supercl != Object.class) {
             System.out.print(" extends " + supercl.getName());
         }
-
 
         // 打印实现的接口列表
         printInterfaces(cl);
@@ -101,9 +106,11 @@ class ReflectionTesti {
         printConstructors(cl);
         System.out.println();
 
+        // 打印方法列表
         printMethods(cl);
         System.out.println();
 
+        // 打印字段列表
         printFields(cl);
         System.out.println("}");
     }
@@ -111,6 +118,7 @@ class ReflectionTesti {
 
     /**
      * 打印类的所有构造器
+     *
      * @param cl 要分析的 Class 对象
      */
     public static void printConstructors(Class cl) {
@@ -142,6 +150,7 @@ class ReflectionTesti {
 
     /**
      * 打印类的所有方法
+     *
      * @param cl 要分析的 Class 对象
      */
     public static void printMethods(Class cl) {
@@ -172,6 +181,7 @@ class ReflectionTesti {
 
     /**
      * 打印类的所有字段
+     *
      * @param cl 要分析的 Class 对象
      */
     public static void printFields(Class cl) {
@@ -193,6 +203,7 @@ class ReflectionTesti {
 
     /**
      * 打印 sealed 类的允许子类列表（Java 17+ 特性）
+     *
      * @param cl 要分析的 Class 对象
      */
     public static void printPermittedSubclasses(Class cl) {
@@ -215,6 +226,7 @@ class ReflectionTesti {
 
     /**
      * 打印类实现的所有接口
+     *
      * @param cl 要分析的 Class 对象
      */
     public static void printInterfaces(Class cl) {
@@ -229,6 +241,36 @@ class ReflectionTesti {
             }
             System.out.print(interfaces[i].getName());
 
+        }
+    }
+}
+
+/**
+ * Java 反射机制演示程序
+ * 演示如何通过反射调用任意方法和构造器
+ */
+class MethodTableTest {
+    public static void main(String[] args)
+            throws NoSuchMethodException, InvocationTargetException, IllegalAccessException {
+
+        Method square = MethodTableTest.class.getMethod("square", double.class);
+        Method sqrt = Math.class.getMethod("sqrt", double.class);
+
+        printTable(1, 10, 10, square);
+        printTable(1, 10, 10, sqrt);
+
+    }
+
+    public static double square(double x) {
+        return x * x;
+    }
+
+    public static void printTable(double from, double to, int numBars, Method f)
+            throws InvocationTargetException, IllegalAccessException {
+        double dx = (to - from) / (numBars - 1);
+        for (double x = from; x <= to; x += dx) {
+            double y = (Double) f.invoke(null, x);
+            System.out.printf("%10.4f | %10.4f%n", x, y);
         }
     }
 }

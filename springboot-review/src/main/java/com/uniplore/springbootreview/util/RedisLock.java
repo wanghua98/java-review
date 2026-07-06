@@ -11,16 +11,18 @@ import java.util.concurrent.TimeUnit;
 @RequiredArgsConstructor
 public class RedisLock {
 
+    private final String prefix = "lock:";
+
     @Autowired
     private  StringRedisTemplate stringRedisTemplate;
     public  boolean lock(String key)
     {
-        return Boolean.TRUE.equals(stringRedisTemplate.opsForValue().setIfAbsent(key, "1", 10L, TimeUnit.SECONDS));
+        return Boolean.TRUE.equals(stringRedisTemplate.opsForValue().setIfAbsent(prefix+key, "1", 10, TimeUnit.MINUTES));
     }
 
 
     public  void unlock(String key)
     {
-        stringRedisTemplate.delete(key);
+        stringRedisTemplate.delete(prefix+key);
     }
 }

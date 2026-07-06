@@ -13,7 +13,7 @@ import java.util.List;
 
 @Tag(name = "student", description = "student controller")
 @RequiredArgsConstructor
-@RestController
+@RestController("/api")
 public class StudentController {
 
     private final StudentService studentServiceImpl;
@@ -31,7 +31,6 @@ public class StudentController {
 
     /**
      * 获取单个学生信息
-     * @param id
      * @return Student
      */
     @Operation(summary = "获取学生信息", description = "获取学生信息")
@@ -46,7 +45,7 @@ public class StudentController {
      */
     @Operation(summary = "插入学生信息", description = "插入学生信息")
     @PostMapping("/student")
-    public Result insertStudent(Student student) {
+    public Result<String> insertStudent(Student student) {
         return Result.success(studentServiceImpl.save(student) ? "success" : "fail");
     }
 
@@ -55,7 +54,7 @@ public class StudentController {
      */
     @Operation(summary = "删除学生信息", description = "删除学生信息")
     @DeleteMapping("/student")
-    public Result deleteStudent(Student student) {
+    public Result<String> deleteStudent(Student student) {
         return Result.success(studentServiceImpl.removeById(student) ? "success" : "fail");
     }
 
@@ -64,7 +63,7 @@ public class StudentController {
      */
     @Operation(summary = "更新学生信息", description = "更新学生信息")
     @PutMapping("/student")
-    public Result updateStudent(Student student) {
+    public Result<String> updateStudent(Student student) {
         return Result.success(studentServiceImpl.updateById(student) ? "success" : "fail");
     }
 

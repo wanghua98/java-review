@@ -1,4 +1,4 @@
-package com.uniplore.Features_of_Java8;
+package com.uniplore.featuresofJava8;
 
 
 import org.junit.Test;

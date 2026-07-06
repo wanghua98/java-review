@@ -23,7 +23,7 @@ public class Reflection {
         Employee e = new Employee("Tom", 5000, 2020, 1, 1);
         Class cl = e.getClass();
         System.out.println(e.getClass().getName() + "  " + e.getName());
-        //com.uniplore.entity.Employee * * Tom   包名也作为类名的一部分
+        //com.uniplore.pojo.Employee * * Tom   包名也作为类名的一部分
 
         //Class类是一个泛型类
         Class cl1 = Random.class; //if you import java.util.*;

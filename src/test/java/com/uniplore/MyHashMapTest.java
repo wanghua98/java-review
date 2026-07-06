@@ -1,6 +1,5 @@
-package com.unniplore;
+package com.uniplore;
 
-import com.uniplore.MyHashMap;
 import org.junit.Test;
 
 public class MyHashMapTest {

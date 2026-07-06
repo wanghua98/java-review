@@ -1,4 +1,4 @@
-package com.uniplore.springbootreview;
+package com.uniplore;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;

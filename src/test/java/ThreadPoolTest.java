@@ -5,7 +5,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadPoolExecutor;
 
-public class test {
+public class ThreadPoolTest {
 
     /**
      * 测试线程，利用线程池进行异步操作
@@ -23,6 +23,7 @@ public class test {
 
         e.submit(r);
         System.out.println("主线程已经完成");
+        e.shutdown();
 
     }
 }

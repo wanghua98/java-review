@@ -41,8 +41,7 @@ public class CHMDemo {
         ExecutorService executor = Executors.newFixedThreadPool(processors);
 
         Path pathToRoot = Path.of(".");
-        for (Path p : descents(pathToRoot))
-        {
+        for (Path p : descents(pathToRoot)) {
             executor.submit(() -> process(p));
         }
 

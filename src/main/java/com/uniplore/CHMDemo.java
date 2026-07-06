@@ -12,11 +12,25 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-// 对于ConcurrentHashMap在并发情况下统计单词数量的一个小案例
+
+/**
+ * 对于ConcurrentHashMap在并发情况下统计单词数量的一个小案例
+ *
+ * @author 杨锋
+ * @date 2026/07/06
+ */
 public class CHMDemo {
 
+    /**
+     * 使用ConcurrentHashMap来统计单词数量
+     */
     public static ConcurrentHashMap<String, Long> map = new ConcurrentHashMap<>();
 
+    /**
+     * 处理文件
+     *
+     * @param flie 文件路径
+     */
     public static void process(Path flie) {
         try (var in = new Scanner(flie)) {
             while (in.hasNext()) {
@@ -28,6 +42,13 @@ public class CHMDemo {
         }
     }
 
+    /**
+     * 获取目录下的所有文件和目录
+     *
+     * @param pathToRoot 目录路径
+     * @return 所有文件和目录的集合
+     * @throws IOException 如果IO操作失败
+     */
     public static Set<Path> descents(Path pathToRoot) throws IOException {
         // return a set of all files and directories under pathToRoot
         try (Stream<Path> entries = Files.walk(pathToRoot)) {
@@ -35,19 +56,32 @@ public class CHMDemo {
         }
     }
 
-
+    /**
+     * 主方法
+     *
+     * @param args 命令行参数
+     * @throws IOException          如果IO操作失败
+     * @throws InterruptedException 如果线程被中断
+     */
     public static void main(String[] args) throws IOException, InterruptedException {
+        // 获取CPU核心数
         int processors = Runtime.getRuntime().availableProcessors();
+        // 创建一个固定大小的线程池
         ExecutorService executor = Executors.newFixedThreadPool(processors);
 
+        // 获取目录下的所有文件和目录
         Path pathToRoot = Path.of(".");
+        // 遍历所有文件和目录
         for (Path p : descents(pathToRoot)) {
             executor.submit(() -> process(p));
         }
 
+        // 关闭线程池，不再接收新任务，但已提交任务继续执行并且阻塞等待所有任务完成
         executor.shutdown(); //不再接收新任务，但已提交任务继续执行并且阻塞等待所有任务完成
+        // 阻塞等待所有任务完成
         executor.awaitTermination(10, TimeUnit.MINUTES); //阻塞等待所有任务完成
 
+        // 遍历统计结果
         map.forEach((k, v) ->
         {
             if (v > 10) {

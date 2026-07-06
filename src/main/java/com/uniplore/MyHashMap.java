@@ -1,10 +1,11 @@
 package com.uniplore;
 
-/*
- * MyHashMap
+/**
+ * 自定义HashMap
+ *
  * @author 杨锋
  * @date 2026/7/6
- * @description 自定义HashMap
+ *
  */
 public class MyHashMap<K, V> {
 

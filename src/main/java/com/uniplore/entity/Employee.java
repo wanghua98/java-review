@@ -5,6 +5,11 @@ import lombok.Data;
 
 import java.time.LocalDate;
 
+/**
+ * 员工类
+ *
+ * @author dao
+ */
 @Data
 @AllArgsConstructor
 public class Employee {

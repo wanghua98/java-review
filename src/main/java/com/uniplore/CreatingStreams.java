@@ -13,7 +13,21 @@ import java.util.regex.Pattern;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
+/**
+ * 创建流
+ *
+ * @author 杨锋
+ * @date 2026/07/06
+ *
+ */
 public class CreatingStreams {
+    /**
+     * 显示流的前10个元素
+     *
+     * @param title  流的标题
+     * @param stream 流
+     *
+     */
     public static <T> void show(String title, Stream<T> stream) {
         final int SIZE = 10;
         List<T> firstElements = stream
@@ -33,7 +47,15 @@ public class CreatingStreams {
         System.out.println();
     }
 
+    /**
+     * 创建流
+     *
+     * @param args 命令行参数
+     * @throws IOException 输入输出异常
+     *
+     */
     public static void main(String[] args) throws IOException {
+        // 从文件创建流
         Path path = Path.of("./alice.txt");
         var contents = Files.readString(path);
 
@@ -46,16 +68,15 @@ public class CreatingStreams {
 
         Stream<String> echos = Stream.generate(() -> "Echo");
         show("echos", echos);
+        // 从方法创建流
 
         Stream<Double> randoms = Stream.generate(Math::random);
-        show("randoms", randoms);
-
+        // 从集合创建流
         Stream<BigInteger> integers = Stream.iterate(BigInteger.ONE, n -> n.add(BigInteger.ONE));
         show("integers", integers);
 
         Stream<String> greetings = "Hello\nGluten Tag\nBonjour".lines();
         show("greetings", greetings);
-
         Stream<String> wordsAnotherWay = Pattern.compile("\\PL+").splitAsStream(contents);
         show("wordsAnotherWay", wordsAnotherWay);
 

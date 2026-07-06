@@ -213,8 +213,8 @@ public class MultithreadingStudy {
         @Override
         public void run() {
             for (int i = 0; i < 5; i++) {
-                System.out.println(Thread.currentThread().getName() + 
-                    " - 实现Runnable: " + i);
+                System.out.println(Thread.currentThread().getName() +
+                        " - 实现Runnable: " + i);
                 try {
                     Thread.sleep(100);
                 } catch (InterruptedException e) {
@@ -233,7 +233,7 @@ public class MultithreadingStudy {
         // 使用synchronized关键字保证线程安全
         public synchronized void increment() {
             System.out.println(Thread.currentThread().getName() +
-                " 正在进行计数操作...");
+                    " 正在进行计数操作...");
             count++;
         }
 
@@ -279,8 +279,8 @@ public class MultithreadingStudy {
             }
             data = value;
             available = true;
-            System.out.println(Thread.currentThread().getName() + 
-                " 生产了数据: " + value);
+            System.out.println(Thread.currentThread().getName() +
+                    " 生产了数据: " + value);
             notify(); // 通知消费者可以消费了
         }
 
@@ -293,8 +293,8 @@ public class MultithreadingStudy {
                     e.printStackTrace();
                 }
             }
-            System.out.println(Thread.currentThread().getName() + 
-                " 消费了数据: " + data);
+            System.out.println(Thread.currentThread().getName() +
+                    " 消费了数据: " + data);
             available = false;
             notify(); // 通知生产者可以生产了
         }

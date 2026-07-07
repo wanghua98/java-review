@@ -24,7 +24,7 @@ public class Main {
         System.out.println("CM_PER_INCH:" + CM_PER_INCH);
 
         //枚举类型
-        enum Size { SMALL, MEDIUM, LARGE, EXTRA_LARGE }
+        enum Size {SMALL, MEDIUM, LARGE, EXTRA_LARGE}
         Size s = Size.MEDIUM;
         System.out.println("s:" + s);
 
@@ -56,7 +56,6 @@ public class Main {
             case 2, 3, 4 -> "Winter";
             default -> "Unknown";
         };
-
 
 
     }

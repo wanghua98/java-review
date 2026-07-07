@@ -5,10 +5,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Scanner;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -29,12 +26,12 @@ public class CHMDemo {
     /**
      * 处理文件
      *
-     * @param flie 文件路径
+     * @param file 文件路径
      */
-    public static void process(Path flie) {
-        try (var in = new Scanner(flie)) {
-            while (in.hasNext()) {
-                String word = in.next();
+    public static void process(Path file) {
+        try (var scanner = new Scanner(file)) {
+            while (scanner.hasNext()) {
+                String word = scanner.next();
                 map.merge(word, 1L, Long::sum);
             }
         } catch (IOException e) {
@@ -67,9 +64,19 @@ public class CHMDemo {
         // 获取CPU核心数
         int processors = Runtime.getRuntime().availableProcessors();
         // 创建一个固定大小的线程池
-        ExecutorService executor = Executors.newFixedThreadPool(processors);
+        ThreadPoolExecutor executor = new ThreadPoolExecutor(processors,
+                processors,
+                0L,
+                TimeUnit.MILLISECONDS,
+                new LinkedBlockingQueue<>(),
+                r -> {
+                    Thread t = new Thread(r);
+                    t.setName("my-thread" + t.getId());
+                    return t;
+                },
+                new ThreadPoolExecutor.CallerRunsPolicy());
 
-        // 获取目录下的所有文件和目录
+
         Path pathToRoot = Path.of(".");
         // 遍历所有文件和目录
         for (Path p : descents(pathToRoot)) {
@@ -79,7 +86,7 @@ public class CHMDemo {
         // 关闭线程池，不再接收新任务，但已提交任务继续执行并且阻塞等待所有任务完成
         executor.shutdown(); //不再接收新任务，但已提交任务继续执行并且阻塞等待所有任务完成
         // 阻塞等待所有任务完成
-        executor.awaitTermination(10, TimeUnit.MINUTES); //阻塞等待所有任务完成
+        executor.awaitTermination(10, TimeUnit.MINUTES);
 
         // 遍历统计结果
         map.forEach((k, v) ->

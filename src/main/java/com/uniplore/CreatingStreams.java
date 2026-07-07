@@ -77,17 +77,19 @@ public class CreatingStreams {
 
         Stream<String> greetings = "Hello\nGluten Tag\nBonjour".lines();
         show("greetings", greetings);
+        // 从正则表达式创建流
         Stream<String> wordsAnotherWay = Pattern.compile("\\PL+").splitAsStream(contents);
         show("wordsAnotherWay", wordsAnotherWay);
 
+        // 从文件创建流
         try (Stream<String> lines = Files.lines(path)) {
             show("lines", lines);
         }
-
+        // 从可迭代对象创建流
         Iterable<Path> iterable = FileSystems.getDefault().getRootDirectories();
         Stream<Path> rootDirectories = StreamSupport.stream(iterable.spliterator(), false);
         show("rootDirectories", rootDirectories);
-
+        // 从迭代器创建流
         Iterator<Path> iterator = Path.of("/usr/share/dict/words").iterator();
         Stream<Path> pathComponents = StreamSupport.stream(Spliterators.spliteratorUnknownSize(iterator, Spliterator.ORDERED), false);
         show("pathComponents", pathComponents);

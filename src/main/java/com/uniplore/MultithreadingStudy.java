@@ -1,5 +1,6 @@
 package com.uniplore;
 
+import java.util.Random;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -9,6 +10,8 @@ import static java.util.concurrent.Executors.newFixedThreadPool;
 /**
  * Java多线程学习示例类
  * 演示多线程的核心概念和使用方法
+ *
+ * @author 杨锋
  */
 public class MultithreadingStudy {
 
@@ -174,8 +177,9 @@ public class MultithreadingStudy {
     public static void task(int taskId) {
         System.out.println(Thread.currentThread().getName() +
                 " 正在执行任务 " + taskId);
+        Random random = new Random();
         try {
-            Thread.sleep((int) (Math.random() * 1000));
+            Thread.sleep(random.nextInt(1000));
         } catch (InterruptedException e) {
             e.printStackTrace();
         }

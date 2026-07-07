@@ -8,10 +8,12 @@ import java.util.Random;
 import java.util.Scanner;
 
 
-/*
-反射机制使人们可以在运行时查看字段和方法， 从而能编写出极具通用性的程序。这种
-功能对于系统编程极其有用，但是通常并不适合编写应用程序。反射很脆弱，如果使用反
-射. 编译器将无法帮助你查找编程错误，直到运行时才会发现错误并导致异常。
+/**
+ * 反射机制使人们可以在运行时查看字段和方法， 从而能编写出极具通用性的程序。这种
+ * 功能对于系统编程极其有用，但是通常并不适合编写应用程序。反射很脆弱，如果使用反
+ * 射. 编译器将无法帮助你查找编程错误，直到运行时才会发现错误并导致异常。
+ *
+ * @author 杨锋
  */
 
 public class Reflection {
@@ -21,14 +23,14 @@ public class Reflection {
          * Object 类中的 getClass() 方法将会返回一个 Class 类型的实例
          */
         Employee e = new Employee("Tom", 5000, 2020, 1, 1);
-        Class cl = e.getClass();
+        Class<? extends Employee> cl = e.getClass();
         System.out.println(e.getClass().getName() + "  " + e.getName());
         //com.uniplore.pojo.Employee * * Tom   包名也作为类名的一部分
 
         //Class类是一个泛型类
-        Class cl1 = Random.class; //if you import java.util.*;
-        Class cl2 = int.class;
-        Class cl3 = Double.class;
+        Class<Random> cl1 = Random.class;
+        Class<Integer> cl2 = int.class;
+        Class<Double> cl3 = Double.class;
 
         //虚拟机为每个类型管理一个唯一的 Class 对象。 因此，可以使用==运算符比较两个类对象
         //我的理解是类似instanceof运算符
@@ -59,7 +61,7 @@ public class Reflection {
  * Java 反射机制演示程序
  * 演示如何通过反射获取类的结构信息（构造器、方法、字段等）
  */
-class ReflectionTesti {
+class ReflectionTest {
     public static void main(String[] args)
             throws ClassNotFoundException {
         String name;
@@ -97,9 +99,9 @@ class ReflectionTesti {
         }
 
         // 获取并打印父类信息
-        Class supercl = cl.getSuperclass();
-        if (supercl != null && supercl != Object.class) {
-            System.out.print(" extends " + supercl.getName());
+        Class superClass = cl.getSuperclass();
+        if (superClass != null && superClass != Object.class) {
+            System.out.print(" extends " + superClass.getName());
         }
 
         // 打印实现的接口列表
@@ -164,7 +166,7 @@ class ReflectionTesti {
         // 获取所有声明的方法（不包括继承的方法）
         Method[] methods = cl.getDeclaredMethods();
         for (Method m : methods) {
-            Class retType = m.getReturnType();
+            Class<?> retType = m.getReturnType();
             String name = m.getName();
 
             System.out.print(" ");
@@ -200,7 +202,7 @@ class ReflectionTesti {
             System.out.print("   ");
             // 打印字段修饰符（如果存在）
             String modifiers = Modifier.toString(f.getModifiers());
-            if (modifiers.length() > 0) {
+            if (!modifiers.isEmpty()) {
                 System.out.print(modifiers + " ");
             }
             // 打印字段类型和名称
@@ -268,13 +270,29 @@ class MethodTableTest {
 
     }
 
+    /**
+     * 求平方
+     *
+     * @param x 需要求平方的数
+     * @return
+     */
     public static double square(double x) {
         return x * x;
     }
 
+    /**
+     * 打印函数表
+     *
+     * @param from    起始值
+     * @param to      结束值
+     * @param numBars 段数
+     * @param f       要打印的函数
+     */
     public static void printTable(double from, double to, int numBars, Method f)
             throws InvocationTargetException, IllegalAccessException {
+        // 计算步长
         double dx = (to - from) / (numBars - 1);
+        // 遍历并调用方法
         for (double x = from; x <= to; x += dx) {
             double y = (Double) f.invoke(null, x);
             System.out.printf("%10.4f | %10.4f%n", x, y);

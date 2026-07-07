@@ -4,6 +4,18 @@ spring:
 
   # 数据库配置
   datasource:
+    druid:
+      initial-size: 2                # 初始化连接数
+      min-idle: 5                    # 最小空闲连接
+      max-active: 20                 # 最大活跃连接
+      max-wait: 60000                # 获取连接等待超时（毫秒）
+      time-between-eviction-runs-millis: 60000  # 检测空闲连接间隔
+      min-evictable-idle-time-millis: 300000    # 连接最小空闲时间
+      validation-query: SELECT 1     # 验证连接有效性的 SQL
+      test-while-idle: true          # 空闲时检测
+      test-on-borrow: false          # 获取连接时检测
+      test-on-return: false          # 归还连接时检测
+
     url: jdbc:mysql://localhost:3306/myapp?useSSL=false&serverTimezone=UTC
     username: myuser
     password: mypass123
@@ -12,8 +24,14 @@ spring:
       host: localhost
       port: 6379
       password: redis123
+
+
+mybatis-plus:
+  configuration:
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
 server:
   port: 8001
 
-
-
+logging:
+  level:
+    com.alibaba.druid: DEBUG

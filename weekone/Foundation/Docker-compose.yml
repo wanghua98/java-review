@@ -3,7 +3,6 @@ services:
   mysql:
     image: mysql:8.0
     container_name: mysql-container
-    restart: always
     environment:
       MYSQL_ROOT_PASSWORD: aa
       MYSQL_DATABASE: myapp
@@ -22,7 +21,6 @@ services:
   redis:
     image: redis:7.0-alpine
     container_name: redis-container
-    restart: always
     ports:
       - "6379:6379"
     volumes:

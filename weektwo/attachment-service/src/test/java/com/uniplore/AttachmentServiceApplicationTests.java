@@ -8,6 +8,8 @@ class AttachmentServiceApplicationTests {
 
     @Test
     void contextLoads() {
+        //输出当前项目的根目录
+        System.out.println(System.getProperty("user.dir"));
     }
 
 }

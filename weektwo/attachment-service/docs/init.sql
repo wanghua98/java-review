@@ -23,7 +23,7 @@ CREATE TABLE sys_user
 
 -- 插入测试数据
 INSERT INTO sys_user (id, username, password, nickname, role, status, create_time, update_time)
-VALUES (1, 'admin', 'password', '管理员', 'ADMIN', 1, NOW(), NOW());
+VALUES (1, 'admin', '$2a$10$tJfiFkzN.wSXrMYz8YNty.5.4y3g45WQm/orB4ceVrHk1j795ww9K', '管理员', 'ADMIN', 1, NOW(), NOW());
 
 
 DROP TABLE IF EXISTS `file_upload_task`;
@@ -32,6 +32,9 @@ CREATE TABLE `file_upload_task`
 (
     `id`               BIGINT      NOT NULL COMMENT '上传任务ID',
     `file_md5`         VARCHAR(64) NOT NULL COMMENT '文件MD5，用于秒传及唯一标识',
+    `file_name`       VARCHAR(255)  NOT NULL COMMENT '文件名称',
+    `file_size`       BIGINT        NOT NULL COMMENT '文件大小（Byte）',
+    `file_suffix`     VARCHAR(20)   NOT NULL COMMENT '文件后缀',
     `chunk_count`      INT         NOT NULL COMMENT '文件总分片数',
     `uploaded_count`   INT         NOT NULL DEFAULT 0 COMMENT '已上传分片数',
     `status`           TINYINT     NOT NULL DEFAULT 0 COMMENT '上传状态（0：上传中，1：上传完成，2：上传失败）',

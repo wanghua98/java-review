@@ -24,14 +24,18 @@ public class CHMDemo {
     public static ConcurrentHashMap<String, Long> map = new ConcurrentHashMap<>();
 
     /**
-     * 处理文件
+     * 处理文件统计单词
      *
      * @param file 文件路径
      */
     public static void process(Path file) {
+        // 处理文件
         try (var scanner = new Scanner(file)) {
+        // 读取文件内容
             while (scanner.hasNext()) {
+                // 获取单词
                 String word = scanner.next();
+                // 统计单词数量
                 map.merge(word, 1L, Long::sum);
             }
         } catch (IOException e) {
@@ -91,7 +95,7 @@ public class CHMDemo {
         // 遍历统计结果
         map.forEach((k, v) ->
         {
-            if (v > 10) {
+            if (v > 20) {
                 System.out.println(k + ": " + v);
             }
         });

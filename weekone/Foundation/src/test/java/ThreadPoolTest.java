@@ -10,10 +10,12 @@ public class ThreadPoolTest {
 
     /**
      * 测试线程，利用线程池进行异步操作
-     * @param args
      */
-
     private static final ExecutorService e = Executors.newFixedThreadPool(5);
+    /**
+     * 线程池测试
+     * @param args 参数
+     */
     public static void main(String[] args) {
 
         Runnable r = () ->{
@@ -24,6 +26,7 @@ public class ThreadPoolTest {
 
         e.submit(r);
         System.out.println("主线程已经完成");
+        // 关闭线程池
         e.shutdown();
 
     }

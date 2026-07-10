@@ -15,7 +15,6 @@ import java.util.Scanner;
  *
  * @author 杨锋
  */
-
 public class Reflection {
 
     public static void main(String[] args) throws ClassNotFoundException, NoSuchMethodException, InvocationTargetException, InstantiationException, IllegalAccessException {
@@ -274,7 +273,7 @@ class MethodTableTest {
      * 求平方
      *
      * @param x 需要求平方的数
-     * @return
+     * @return x的平方
      */
     public static double square(double x) {
         return x * x;

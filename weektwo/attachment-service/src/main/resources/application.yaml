@@ -1,8 +1,10 @@
 spring:
   application:
     name: attachment-service
+  profiles:
+    active: dev
 
-# DataSource Config
+  # DataSource Config
   datasource:
     username: root
     password: aa

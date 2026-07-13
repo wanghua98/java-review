@@ -34,6 +34,10 @@ spring:
           max-idle: 10
           # 连接池中的最小空闲连接
           min-idle: 0
+  servlet:
+    multipart:
+          max-file-size: 100MB
+          max-request-size: 100MB
 
 # MyBatis-Plus Config
 mybatis-plus:
@@ -58,3 +62,4 @@ sa-token:
   is-log: true
 server:
   port: 8001
+

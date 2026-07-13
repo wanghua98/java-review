@@ -1,14 +1,19 @@
 package com.uniplore.service.impl;
 
+import cn.hutool.core.util.RandomUtil;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.uniplore.mapper.FileChunkMapper;
+import com.uniplore.mapper.FileInfoMapper;
 import com.uniplore.mapper.FileUploadTaskMapper;
 import com.uniplore.pojo.FileChunk;
+import com.uniplore.pojo.FileInfo;
 import com.uniplore.pojo.FileUploadTask;
 import com.uniplore.result.Result;
 import com.uniplore.result.ResultMessage;
 import com.uniplore.service.FileChunkService;
+import com.uniplore.util.CacheUtil;
+import com.uniplore.util.FileHashUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -21,6 +26,7 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.channels.FileChannel;
+import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
 import java.util.Comparator;
 
@@ -40,6 +46,19 @@ public class FileChunkServiceImpl extends ServiceImpl<FileChunkMapper, FileChunk
      */
     private final FileUploadTaskMapper fileUploadTaskMapper;
 
+    /**
+     * 文件信息Mapper
+     */
+    private final FileInfoMapper fileInfoMapper;
+
+    /**
+     * 缓存工具
+     */
+    private final CacheUtil cacheUtil;
+
+    /**
+     * 上传文件物理存储路径
+     */
     @Value("${file.upload-path}")
     private String path;
 
@@ -57,7 +76,7 @@ public class FileChunkServiceImpl extends ServiceImpl<FileChunkMapper, FileChunk
      */
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public Result<String> saveChunk(FileChunk fileChunk, MultipartFile file) throws IOException {
+    public Result<String> saveChunk(FileChunk fileChunk, MultipartFile file) throws IOException, NoSuchAlgorithmException {
 
         // 1. 校验上传任务是否存在且处于"上传中"状态
         FileUploadTask fileUploadTask = fileUploadTaskMapper.selectById(fileChunk.getTaskId());
@@ -75,29 +94,36 @@ public class FileChunkServiceImpl extends ServiceImpl<FileChunkMapper, FileChunk
             return Result.error(500, ResultMessage.CREATE_DIRECTORY_FAILED.getMessage(), null);
         }
 
-        // TODO: 使用 Redis 判断该分片是否已经上传过，避免重复写入
+        // 3. Redis 判断该分片是否已经上传过，避免重复写入
+        if (cacheUtil.isChunkUploaded(fileChunk.getTaskId(), fileChunk.getChunkNumber())) {
+            log.info("分片已上传，跳过: taskId={}, chunkNumber={}", fileChunk.getTaskId(), fileChunk.getChunkNumber());
+            return Result.success(ResultMessage.CHUNK_SAVED_SUCCESS.getMessage());
+        }
 
-        // 3. 将分片文件写入磁盘，文件名格式为 "{分片序号}.part"
+        // 4. 将分片文件写入磁盘，文件名格式为 "{分片序号}.part"
         try {
             file.transferTo(new File(chunkDirPath + File.separator + fileChunk.getChunkNumber() + ".part"));
         } catch (Exception e) {
             return Result.error(500, ResultMessage.SAVE_CHUNK_FAILED.getMessage(), null);
         }
 
-        // 4. 持久化分片元信息到数据库
-        fileChunk.setChunkPath(chunkDirPath + File.separator + fileChunk.getChunkNumber());
+        // 5. 标记该分片已上传到 Redis
+        cacheUtil.markChunkUploaded(fileChunk.getTaskId(), fileChunk.getChunkNumber());
+
+        // 6. 持久化分片元信息到数据库
+        fileChunk.setChunkPath( fileChunk.getChunkNumber() + ".part");
         if (!save(fileChunk)) {
             return Result.error(500, ResultMessage.SAVE_CHUNK_INFO_FAILED.getMessage(), null);
         }
 
-        // 5. 更新上传任务的已上传分片计数
+        // 7. 更新上传任务的已上传分片计数
         fileUploadTaskMapper.update(null,
                 new LambdaUpdateWrapper<FileUploadTask>()
                         .eq(FileUploadTask::getId, fileChunk.getTaskId())
                         .setSql("uploaded_count = uploaded_count + 1")
         );
 
-        // 6. 重新查询任务，判断是否所有分片均已上传完成
+        // 8. 重新查询任务，判断是否所有分片均已上传完成
         fileUploadTask = fileUploadTaskMapper.selectById(fileChunk.getTaskId());
         if (fileUploadTask.getUploadedCount().equals(fileUploadTask.getChunkCount())) {
             // 全部分片上传完毕，将任务状态置为"上传完成"
@@ -105,13 +131,31 @@ public class FileChunkServiceImpl extends ServiceImpl<FileChunkMapper, FileChunk
             fileUploadTaskMapper.updateById(fileUploadTask);
         }
 
-        // 7. 若尚未全部上传完成，直接返回成功
+        // 9. 若尚未全部上传完成，直接返回成功
         if (fileUploadTask.getStatus() != 1) {
             return Result.success(ResultMessage.CHUNK_SAVED_SUCCESS.getMessage());
         }
 
-        // 8. 所有分片已就绪，执行合并
-        if (mergeChunks(fileChunk.getTaskId())) {
+        // 10. 所有分片已就绪，执行合并
+        String fileName = mergeChunks(fileChunk.getTaskId());
+        if (fileName != null) {
+            String finalFilePath =  chunkDirPath + File.separator + fileName;
+            log.info("分片合并成功，任务ID: {}, 合并后的文件名: {}", fileChunk.getTaskId(), fileName);
+            // 向文件信息表上传文件信息
+            FileInfo fileInfo = new FileInfo();
+            // 文件信息字段
+            fileInfo.setFileName(fileUploadTask.getFileName());
+            // 重新计算文件大小
+            fileInfo.setFileSize(FileHashUtil.fileSize(finalFilePath));
+            // 获取后缀
+            fileInfo.setFileSuffix(fileUploadTask.getFileSuffix());
+            // 计算文件SHA256哈希值
+            fileInfo.setFileSha256(FileHashUtil.sha256(finalFilePath));
+            fileInfo.setStoragePath(fileUploadTask.getId() + File.separator + fileName);
+            fileInfo.setCreateUser(fileUploadTask.getCreateUser());
+
+            fileInfoMapper.insert(fileInfo);
+
             return Result.success(ResultMessage.CHUNK_MERGED_SUCCESS.getMessage());
         } else {
             return Result.error(500, ResultMessage.MERGE_CHUNKS_FAILED.getMessage(), null);
@@ -128,31 +172,32 @@ public class FileChunkServiceImpl extends ServiceImpl<FileChunkMapper, FileChunk
      * @param taskId 文件上传任务ID
      * @return 合并成功返回 true，失败返回 false
      */
-    public boolean mergeChunks(Long taskId) throws IOException {
+    public String mergeChunks(Long taskId) throws IOException {
         // 分片临时存储目录
         String tempDirPath = this.path + File.separator + taskId;
 
         // 查询上传任务以获取原始文件名，用于命名合并后的完整文件
         FileUploadTask task = fileUploadTaskMapper.selectById(taskId);
         if (task == null) {
-            log.error("上传任务不存在: " + taskId);
-            return false;
+            log.error("上传任务不存在: {}", taskId);
+            return null;
         }
-        // 合并后的完整文件路径 = 分片目录 + 原始文件名
-        String finalFilePath = tempDirPath + File.separator + task.getFileName();
+        // 合并后的完整文件路径 = 分片目录 + 随机数
+        String fileName = RandomUtil.randomNumbers(5);
+        String finalFilePath = tempDirPath + File.separator + fileName;
 
         // 校验分片目录是否存在
         File chunkDir = new File(tempDirPath);
         if (!chunkDir.exists() || !chunkDir.isDirectory()) {
-            log.error("分片目录不存在或不是目录: " + tempDirPath);
-            return false;
+            log.error("分片目录不存在或不是目录: {}", tempDirPath);
+            return null;
         }
 
         // 列出所有 .part 分片文件
         File[] chunks = chunkDir.listFiles((dir, name) -> name.endsWith(".part"));
         if (chunks == null || chunks.length == 0) {
-            log.error("分片目录下无分片文件: " + tempDirPath);
-            return false;
+            log.error("分片目录下无分片文件: {}", tempDirPath);
+            return null;
         }
 
         // 按分片序号升序排列，确保拼接顺序正确
@@ -160,11 +205,12 @@ public class FileChunkServiceImpl extends ServiceImpl<FileChunkMapper, FileChunk
                 f -> Integer.parseInt(f.getName().replace(".part", ""))
         ));
 
-        // 依次读取每个分片并追加写入到目标文件
+        // 依次读取每个分片并追加写入到目标文件,try-with-resources 确保资源自动关闭
         try (FileOutputStream fos = new FileOutputStream(finalFilePath);
              FileChannel outChannel = fos.getChannel()) {
             for (File chunk : chunks) {
-                try (FileChannel inChannel = new FileInputStream(chunk).getChannel()) {
+                try (FileInputStream fis = new FileInputStream(chunk);
+                     FileChannel inChannel = fis.getChannel()) {
                     long size = inChannel.size();
                     long transferred = 0;
                     // transferTo 可能不会一次传完，需要循环直到全部传输完成
@@ -174,14 +220,14 @@ public class FileChunkServiceImpl extends ServiceImpl<FileChunkMapper, FileChunk
                 }
             }
         } catch (IOException e) {
-            log.error("合并文件失败: " + finalFilePath, e);
+            log.error("合并文件失败: {}", finalFilePath, e);
             // 合并失败时清理可能产生的不完整文件
             File partialFile = new File(finalFilePath);
             if (partialFile.exists() && !partialFile.delete()) {
-                log.error("删除不完整的合并文件失败: " + finalFilePath);
+                log.error("删除不完整的合并文件失败: {}", finalFilePath);
             }
             throw e;
         }
-        return true;
+        return fileName;
     }
 }

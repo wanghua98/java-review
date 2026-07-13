@@ -3,10 +3,14 @@ package com.uniplore.service.impl;
 import cn.dev33.satoken.stp.StpUtil;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.uniplore.mapper.FileInfoMapper;
 import com.uniplore.mapper.FileUploadTaskMapper;
+import com.uniplore.pojo.FileInfo;
 import com.uniplore.pojo.FileUploadTask;
 import com.uniplore.result.Result;
 import com.uniplore.service.FileUploadTaskService;
+import lombok.RequiredArgsConstructor;
+import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Service;
 
 /**
@@ -15,7 +19,10 @@ import org.springframework.stereotype.Service;
  * @author yf
  */
 @Service
+@RequiredArgsConstructor
 public class FileUploadTaskServiceImpl extends ServiceImpl<FileUploadTaskMapper, FileUploadTask> implements FileUploadTaskService {
+
+    private final FileInfoMapper fileInfoMapper;
 
     /**
      * 初始化文件上传任务
@@ -25,20 +32,46 @@ public class FileUploadTaskServiceImpl extends ServiceImpl<FileUploadTaskMapper,
      */
     @Override
     public Result<FileUploadTask> initFile(FileUploadTask fileUploadTask) {
-        // 先判断文件是否已存在
-        FileUploadTask existingTask = getOne(new QueryWrapper<FileUploadTask>().eq("file_md5", fileUploadTask.getFileMd5()));
-        if (existingTask != null) {
-            //TODO 文件已经存在可以秒传
-            return Result.success(existingTask);
+        // 1. 检查文件是否已存在（通过 SHA-256 判断），实现秒传
+        FileInfo existing = fileInfoMapper.selectOne(
+                new QueryWrapper<FileInfo>()
+                        .eq("file_sha256", fileUploadTask.getFileSha256())
+                        .last("LIMIT 1")
+        );
+        if (existing != null) {
+            // 文件已存在，直接创建一条新的文件记录引用同一存储文件，无需上传
+            FileInfo newFileInfo = oldFileInfo(fileUploadTask, existing);
+            fileInfoMapper.insert(newFileInfo);
+            return Result.success(null);
         }
 
-        // 创建文件上传任务
+        // 2. 文件不存在，创建上传任务走正常分片上传
         fileUploadTask.setCreateUser(StpUtil.getLoginIdAsLong());
         fileUploadTask.setStatus(0);
         fileUploadTask.setUploadedCount(0);
         save(fileUploadTask);
 
-        // 返回文件上传任务信息 主要是返回生成id
-        return Result.success(getOne(new QueryWrapper<FileUploadTask>().eq("file_md5", fileUploadTask.getFileMd5())));
+        return Result.success(getOne(new QueryWrapper<FileUploadTask>().eq("file_sha256", fileUploadTask.getFileSha256())));
+    }
+
+    /**
+     * 从已存在的文件记录创建新的文件记录，引用同一存储文件
+     * @param fileUploadTask 文件上传任务信息
+     * @param existing       已存在的文件记录
+     * @return 新的文件记录
+     */
+    @NonNull
+    private static FileInfo oldFileInfo(FileUploadTask fileUploadTask, FileInfo existing) {
+        FileInfo oldFileInfo = new FileInfo();
+        oldFileInfo.setFileName(fileUploadTask.getFileName());
+        oldFileInfo.setFileSize(existing.getFileSize());
+        oldFileInfo.setFileSuffix(existing.getFileSuffix());
+        oldFileInfo.setContentType(existing.getContentType());
+        oldFileInfo.setFileSha256(existing.getFileSha256());
+        oldFileInfo.setStoragePath(existing.getStoragePath());
+        oldFileInfo.setParentId(fileUploadTask.getParentId());
+        oldFileInfo.setCreateUser(StpUtil.getLoginIdAsLong());
+        oldFileInfo.setStatus(1);
+        return oldFileInfo;
     }
 }

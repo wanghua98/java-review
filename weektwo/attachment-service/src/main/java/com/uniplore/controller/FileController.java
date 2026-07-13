@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.security.NoSuchAlgorithmException;
 
 /**
  * 文件相关接口控制器
@@ -37,7 +38,7 @@ public class FileController {
      */
     @PostMapping("/init")
     public Result<FileUploadTask> initFile(@RequestBody FileUploadTask fileUploadTask) {
-        if(fileUploadTask.getFileMd5() == null || fileUploadTask.getFileName() == null) {
+        if(fileUploadTask.getFileSha256() == null || fileUploadTask.getFileName() == null) {
             return Result.error(400, "参数有误", null);
         }
         return fileUploadTaskService.initFile(fileUploadTask);
@@ -55,7 +56,7 @@ public class FileController {
     @PostMapping("/upload")
     public Result<String> uploadChunk(@RequestParam("taskId") String taskId,
                                       @RequestParam("chunkNumber") Integer chunkNumber,
-                                      @RequestParam("file") MultipartFile file) throws IOException {
+                                      @RequestParam("file") MultipartFile file) throws IOException, NoSuchAlgorithmException {
 
         //参数校验
         if (file == null || taskId == null || chunkNumber == null) {

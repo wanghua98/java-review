@@ -48,6 +48,10 @@ public class InitRunner implements CommandLineRunner {
      */
     private static final String ROOT_DIRECTORY_NAME = "admin";
 
+    /**
+     * 初始化系统
+     * @param args 命令行参数（未使用）
+     */
     @Override
     public void run(String... args) {
         // 1. 检查是否已初始化（通过查找ADMIN用户判断）

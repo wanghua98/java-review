@@ -18,12 +18,12 @@ public class FileUploadTask {
     /**
      * 上传任务ID
      */
-    @TableId(type = IdType.ASSIGN_ID)
+    @TableId(type = IdType.AUTO)
     private Long id;
     /**
-     * 文件MD5，用于秒传及唯一标识
+     * 文件SHA-256（用于秒传校验及唯一标识）
      */
-    private String fileMd5;
+    private String fileSha256;
     /**
      * 文件名称
      */
@@ -48,6 +48,10 @@ public class FileUploadTask {
      * 上传状态（0：上传中，1：上传完成，2：上传失败）
      */
     private Integer status;
+    /**
+     * 目标目录ID，0表示根目录
+     */
+    private Long parentId;
     /**
      * 创建用户ID
      */

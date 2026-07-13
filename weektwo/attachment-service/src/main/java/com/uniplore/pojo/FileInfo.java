@@ -18,7 +18,7 @@ public class FileInfo {
     /**
      * 文件ID
      */
-    @TableId(type = IdType.ASSIGN_ID)
+    @TableId(type = IdType.AUTO)
     private Long id;
     /**
      * 文件名称
@@ -37,13 +37,17 @@ public class FileInfo {
      */
     private String contentType;
     /**
-     * 文件MD5
+     * 文件SHA-256（用于秒传及完整性校验）
      */
-    private String fileMd5;
+    private String fileSha256;
     /**
      * 文件存储路径
      */
     private String storagePath;
+    /**
+     * 所在目录ID，0表示根目录
+     */
+    private Long parentId;
     /**
      * 上传用户ID
      */

@@ -98,6 +98,13 @@
             <artifactId>commons-pool2</artifactId>
         </dependency>
 
+        <!-- 上传文件 -->
+        <dependency>
+            <groupId>commons-fileupload</groupId>
+            <artifactId>commons-fileupload</artifactId>
+            <version>1.6.0</version>
+        </dependency>
+
 
     </dependencies>
 

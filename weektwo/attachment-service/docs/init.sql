@@ -64,7 +64,6 @@ CREATE TABLE `file_upload_task` (
                                     `create_user`    BIGINT       NOT NULL                 COMMENT '创建用户ID',
                                     `create_time`    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
                                     PRIMARY KEY (`id`),
-                                    UNIQUE KEY `uk_file_sha256` (`file_sha256`) COMMENT '文件SHA-256唯一索引（避免并发重复创建任务）',
                                     KEY `idx_create_user` (`create_user`) COMMENT '用户索引',
                                     KEY `idx_status` (`status`) COMMENT '上传状态索引'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='文件上传任务表';
@@ -98,7 +97,7 @@ CREATE TABLE `file_info` (
                              `file_size`    BIGINT        NOT NULL                 COMMENT '文件大小（单位：字节）',
                              `file_suffix`  VARCHAR(20)   DEFAULT NULL             COMMENT '文件后缀（不含点）',
                              `content_type` VARCHAR(100)  DEFAULT NULL             COMMENT 'MIME类型',
-                             `file_sha256`  VARCHAR(64)   NOT NULL                 COMMENT '文件SHA-256（用于秒传及完整性校验）',
+                             `file_sha256`  VARCHAR(64)                            COMMENT '文件SHA-256（用于秒传及完整性校验）',
                              `storage_path` VARCHAR(500)  NOT NULL                 COMMENT '文件存储路径',
                              `parent_id`    BIGINT        NOT NULL DEFAULT 0       COMMENT '所在目录ID，0表示根目录',
                              `create_user`  BIGINT        NOT NULL                 COMMENT '上传用户ID',

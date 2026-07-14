@@ -8,11 +8,14 @@ import com.uniplore.mapper.FileUploadTaskMapper;
 import com.uniplore.pojo.FileInfo;
 import com.uniplore.pojo.FileUploadTask;
 import com.uniplore.result.Result;
+import com.uniplore.service.FileDirectoryService;
 import com.uniplore.service.FileUploadTaskService;
 import com.uniplore.util.CacheUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Service;
+
+import java.util.ArrayList;
 
 /**
  * 文件上传任务Service实现类
@@ -26,6 +29,8 @@ public class FileUploadTaskServiceImpl extends ServiceImpl<FileUploadTaskMapper,
     private final FileInfoMapper fileInfoMapper;
 
     private final CacheUtil cacheUtil;
+
+    private final FileDirectoryService fileDirectoryService;
 
     /**
      * 初始化文件上传任务
@@ -46,10 +51,30 @@ public class FileUploadTaskServiceImpl extends ServiceImpl<FileUploadTaskMapper,
             if (existing != null) {
                 // 文件已存在，直接创建一条新的文件记录引用同一存储文件，无需上传
                 FileInfo newFileInfo = oldFileInfo(fileUploadTask, existing);
+                // 自动重命名：如果目标目录已存在同名文件，追加编号避免冲突
+                String uniqueName = fileDirectoryService.resolveUniqueFileName(
+                        fileUploadTask.getParentId(), newFileInfo.getFileName());
+                newFileInfo.setFileName(uniqueName);
                 fileInfoMapper.insert(newFileInfo);
                 // 秒传成功，返回 -1 表示无需上传
                 fileUploadTask.setId(-1L);
                 return Result.success(fileUploadTask);
+            }
+
+            // 检查是否有未完成的上传任务（续传：同一用户 + 同一 SHA-256 + 正在上传中）
+            Long userId = StpUtil.getLoginIdAsLong();
+            FileUploadTask incompleteTask = getOne(new QueryWrapper<FileUploadTask>()
+                    .eq("create_user", userId)
+                    .eq("file_sha256", sha256)
+                    .eq("status", 0)
+                    .orderByDesc("id")
+                    .last("LIMIT 1")
+            );
+            if (incompleteTask != null && cacheUtil.isTaskExists(incompleteTask.getId())) {
+                // 续传：从 Redis 读取已上传的分片编号列表，前端据此跳过已完成分片
+                incompleteTask.setUploadedChunks(
+                        new ArrayList<>(cacheUtil.getUploadedChunkNumbers(incompleteTask.getId())));
+                return Result.success(incompleteTask);
             }
         }
 

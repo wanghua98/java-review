@@ -5,6 +5,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * file_upload_task表对应的实体类
@@ -61,4 +62,9 @@ public class FileUploadTask {
      */
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createTime;
+    /**
+     * 已上传的分片编号列表（仅用于续传响应，不持久化）
+     */
+    @TableField(exist = false)
+    private List<Integer> uploadedChunks;
 }

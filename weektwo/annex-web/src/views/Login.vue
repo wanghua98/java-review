@@ -4,9 +4,9 @@
   登录成功后跳转到用户信息主页（/）。
 -->
 <script setup>
-import { ref } from 'vue'
-import { useRouter } from 'vue-router'
-import { login } from '@/api/user.js'
+import {ref} from 'vue'
+import {useRouter} from 'vue-router'
+import {login} from '@/api/user.js'
 
 const router = useRouter()
 
@@ -43,21 +43,44 @@ async function handleLogin() {
     <h2>登录</h2>
     <!-- 表单 -->
     <div class="form">
-      <input v-model="username" placeholder="用户名" />
-      <input v-model="password" type="password" placeholder="密码" />
+      <input v-model="username" placeholder="用户名"/>
+      <input v-model="password" type="password" placeholder="密码"/>
       <button @click="handleLogin">登录</button>
     </div>
     <!-- 提示消息 -->
     <p v-if="message" class="msg">{{ message }}</p>
     <!-- 跳转注册 -->
-    <p>还没有账号？<router-link to="/register">去注册</router-link></p>
+    <p>还没有账号？
+      <router-link to="/register">去注册</router-link>
+    </p>
   </div>
 </template>
 
 <style scoped>
-.page { max-width: 360px; margin: 80px auto; text-align: center; }
-.form { display: flex; flex-direction: column; gap: 12px; }
-input { padding: 8px 12px; font-size: 14px; }
-button { padding: 8px; cursor: pointer; }
-.msg { color: red; font-size: 13px; }
+.page {
+  max-width: 360px;
+  margin: 80px auto;
+  text-align: center;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+input {
+  padding: 8px 12px;
+  font-size: 14px;
+}
+
+button {
+  padding: 8px;
+  cursor: pointer;
+}
+
+.msg {
+  color: red;
+  font-size: 13px;
+}
 </style>

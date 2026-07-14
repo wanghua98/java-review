@@ -4,9 +4,9 @@
   注册成功后自动跳转到登录页，让用户手动登录。
 -->
 <script setup>
-import { ref } from 'vue'
-import { useRouter } from 'vue-router'
-import { register } from '@/api/user.js'
+import {ref} from 'vue'
+import {useRouter} from 'vue-router'
+import {register} from '@/api/user.js'
 
 const router = useRouter()
 
@@ -30,10 +30,10 @@ async function handleRegister() {
   // 调用注册 API
   const res = await register(username.value, password.value)
   if (res.code === 200) {
-    // 注册成功，3 秒后跳转到登录页
+    // 注册成功，后跳转到我的文件解密页面
     success.value = true
-    message.value = '注册成功，即将跳转到登录页...'
-    setTimeout(() => router.push('/login'), 3000)
+    message.value = '注册成功，即将跳转到我的文件界面'
+    setTimeout(() => router.push('/files'), 500)
   } else {
     message.value = res.message || '注册失败'
   }
@@ -44,21 +44,47 @@ async function handleRegister() {
   <div class="page">
     <h2>注册</h2>
     <div class="form">
-      <input v-model="username" placeholder="用户名" />
-      <input v-model="password" type="password" placeholder="密码" />
+      <input v-model="username" placeholder="用户名"/>
+      <input v-model="password" type="password" placeholder="密码"/>
       <button @click="handleRegister">注册</button>
     </div>
     <!-- 提示消息，成功后显示绿色 -->
     <p v-if="message" :class="['msg', { success }]">{{ message }}</p>
-    <p>已有账号？<router-link to="/login">去登录</router-link></p>
+    <p>已有账号？
+      <router-link to="/login">去登录</router-link>
+    </p>
   </div>
 </template>
 
 <style scoped>
-.page { max-width: 360px; margin: 80px auto; text-align: center; }
-.form { display: flex; flex-direction: column; gap: 12px; }
-input { padding: 8px 12px; font-size: 14px; }
-button { padding: 8px; cursor: pointer; }
-.msg { color: red; font-size: 13px; }
-.msg.success { color: green; }
+.page {
+  max-width: 360px;
+  margin: 80px auto;
+  text-align: center;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+input {
+  padding: 8px 12px;
+  font-size: 14px;
+}
+
+button {
+  padding: 8px;
+  cursor: pointer;
+}
+
+.msg {
+  color: red;
+  font-size: 13px;
+}
+
+.msg.success {
+  color: green;
+}
 </style>

@@ -8,7 +8,9 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -25,7 +27,13 @@ import java.util.stream.Collectors;
 @Component
 public class CacheUtil {
 
+    /**
+     * Redis 锁工具类，用于分片上传去重
+     */
     private final RedisLock redisLock;
+    /**
+     * Redis 模板，用于字符串操作
+     */
     private final StringRedisTemplate stringRedisTemplate;
 
     /**
@@ -151,6 +159,26 @@ public class CacheUtil {
         String key = CHUNK_TASK_PREFIX + ":" + taskId;
         Long count = stringRedisTemplate.opsForHash().size(key);
         return count == null ? 0L : count;
+    }
+
+    /**
+     * 获取已上传的分片编号集合
+     * <p>
+     * 从 Redis Hash 的 field keys 读取，用于续传时告知前端哪些分片可跳过。
+     * </p>
+     *
+     * @param taskId 上传任务ID
+     * @return 已上传分片编号集合
+     */
+    public Set<Integer> getUploadedChunkNumbers(Long taskId) {
+        String key = CHUNK_TASK_PREFIX + ":" + taskId;
+        Set<Object> fields = stringRedisTemplate.opsForHash().keys(key);
+        if (fields == null || fields.isEmpty()) {
+            return new HashSet<>();
+        }
+        return fields.stream()
+                .map(f -> Integer.valueOf(f.toString()))
+                .collect(Collectors.toSet());
     }
 
     /**

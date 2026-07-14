@@ -5,9 +5,9 @@
   包含登出按钮。
 -->
 <script setup>
-import { ref, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
-import { getUserInfo, changeInfo, logout } from '@/api/user.js'
+import {ref, onMounted} from 'vue'
+import {useRouter} from 'vue-router'
+import {getUserInfo, changeInfo, logout} from '@/api/user.js'
 
 const router = useRouter()
 
@@ -45,7 +45,7 @@ async function handleChangeNickname() {
     return
   }
   // 调用修改信息接口
-  const res = await changeInfo({ nickname: newNickname.value.trim() })
+  const res = await changeInfo({nickname: newNickname.value.trim()})
   if (res.code === 200) {
     message.value = '修改成功'
     // 更新本地显示
@@ -69,7 +69,7 @@ async function handleChangePassword() {
     return
   }
   // 调用修改信息接口（传 password 字段）
-  const res = await changeInfo({ password: newPassword.value })
+  const res = await changeInfo({password: newPassword.value})
   if (res.code === 200) {
     message.value = '密码修改成功'
     // 清空输入框
@@ -106,15 +106,15 @@ async function handleLogout() {
     <!-- 修改昵称 -->
     <div class="form">
       <h3>修改昵称</h3>
-      <input v-model="newNickname" placeholder="输入新昵称" />
+      <input v-model="newNickname" placeholder="输入新昵称"/>
       <button @click="handleChangeNickname">保存</button>
     </div>
 
     <!-- 修改密码 -->
     <div class="form">
       <h3>修改密码</h3>
-      <input v-model="newPassword" type="password" placeholder="输入新密码" />
-      <input v-model="confirmPassword" type="password" placeholder="再次输入新密码" />
+      <input v-model="newPassword" type="password" placeholder="输入新密码"/>
+      <input v-model="confirmPassword" type="password" placeholder="再次输入新密码"/>
       <button @click="handleChangePassword">修改密码</button>
     </div>
 
@@ -127,13 +127,59 @@ async function handleLogout() {
 </template>
 
 <style scoped>
-.page { max-width: 400px; margin: 40px auto; text-align: center; }
-.card { background: #f5f5f5; padding: 16px; border-radius: 6px; text-align: left; margin-bottom: 20px; }
-.card p { margin: 6px 0; font-size: 14px; }
-.form { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
-.form h3 { margin: 0; font-size: 15px; }
-input { padding: 8px 12px; font-size: 14px; }
-button { padding: 8px; cursor: pointer; }
-.logout { margin-top: 20px; background: #ff4d4f; color: #fff; border: none; padding: 8px 24px; border-radius: 4px; cursor: pointer; }
-.msg { color: green; font-size: 13px; }
+.page {
+  max-width: 400px;
+  margin: 40px auto;
+  text-align: center;
+}
+
+.card {
+  background: #f5f5f5;
+  padding: 16px;
+  border-radius: 6px;
+  text-align: left;
+  margin-bottom: 20px;
+}
+
+.card p {
+  margin: 6px 0;
+  font-size: 14px;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.form h3 {
+  margin: 0;
+  font-size: 15px;
+}
+
+input {
+  padding: 8px 12px;
+  font-size: 14px;
+}
+
+button {
+  padding: 8px;
+  cursor: pointer;
+}
+
+.logout {
+  margin-top: 20px;
+  background: #ff4d4f;
+  color: #fff;
+  border: none;
+  padding: 8px 24px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.msg {
+  color: green;
+  font-size: 13px;
+}
 </style>

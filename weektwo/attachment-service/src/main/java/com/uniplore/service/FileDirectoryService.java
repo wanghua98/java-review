@@ -40,8 +40,8 @@ public interface FileDirectoryService extends IService<FileDirectory> {
     /**
      * 重命名用户个人目录
      *
-     * @param userId   用户ID
-     * @param newName  新目录名称
+     * @param userId  用户ID
+     * @param newName 新目录名称
      * @return 更新后的目录
      */
     FileDirectory renameUserDirectory(Long userId, String newName);
@@ -120,4 +120,29 @@ public interface FileDirectoryService extends IService<FileDirectory> {
      * @throws IllegalArgumentException 目录不存在或无权操作
      */
     boolean deleteDirectory(Long dirId, Long userId);
+
+    /**
+     * 在目标目录下为文件解析一个不重名的文件名
+     * <p>
+     * 如果目标目录中已存在同名文件，则自动生成带编号的新文件名，
+     * 命名规则：原文件名 (1).扩展名、原文件名 (2).扩展名 ...
+     * </p>
+     *
+     * @param parentId         目标目录ID
+     * @param originalFileName 原始文件名
+     * @return 解析后的唯一文件名（如果原始文件名不冲突则返回原文件名）
+     */
+    String resolveUniqueFileName(Long parentId, String originalFileName);
+
+    /**
+     * 在目标目录下为子目录解析一个不重名的目录名
+     * <p>
+     * 规则与 resolveUniqueFileName 一致，但查询的是 file_directory 表。
+     * </p>
+     *
+     * @param parentId        目标父目录ID
+     * @param originalDirName 原始目录名
+     * @return 解析后的唯一目录名（如果原始名称不冲突则返回原名称）
+     */
+    String resolveUniqueDirName(Long parentId, String originalDirName);
 }

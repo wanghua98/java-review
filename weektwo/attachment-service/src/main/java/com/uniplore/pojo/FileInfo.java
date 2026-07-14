@@ -1,6 +1,7 @@
 package com.uniplore.pojo;
 
 import com.baomidou.mybatisplus.annotation.*;
+import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
@@ -14,6 +15,7 @@ import java.time.LocalDateTime;
 @TableName("file_info")
 @Data
 @NoArgsConstructor
+@AllArgsConstructor
 public class FileInfo {
     /**
      * 文件ID

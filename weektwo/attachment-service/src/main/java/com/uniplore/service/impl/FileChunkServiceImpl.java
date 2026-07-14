@@ -13,11 +13,14 @@ import com.uniplore.pojo.FileUploadTask;
 import com.uniplore.result.Result;
 import com.uniplore.result.ResultMessage;
 import com.uniplore.service.FileChunkService;
+import com.uniplore.service.FileDirectoryService;
 import com.uniplore.util.CacheUtil;
 import com.uniplore.util.FileHashUtil;
 import com.uniplore.util.RedisLock;
+import com.uniplore.util.AfterCommitRunner;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -78,6 +81,11 @@ public class FileChunkServiceImpl extends ServiceImpl<FileChunkMapper, FileChunk
     private final RedisLock redisLock;
 
     /**
+     * 文件目录Service（用于自动重命名冲突文件名）
+     */
+    private final FileDirectoryService fileDirectoryService;
+
+    /**
      * 保存分片
      * <p>
      * 接收单个分片文件，保存到本地临时目录并记录分片信息。
@@ -92,102 +100,110 @@ public class FileChunkServiceImpl extends ServiceImpl<FileChunkMapper, FileChunk
     @Transactional(rollbackFor = Exception.class)
     public Result<String> saveChunk(FileChunk fileChunk, MultipartFile file) throws IOException {
 
-        // 1. 通过 Redis 校验上传任务是否存在
+        // 通过 Redis 校验上传任务是否存在
         if (!cacheUtil.isTaskExists(fileChunk.getTaskId())) {
             return Result.error(500, ResultMessage.TASK_NOT_FOUND.getMessage(), null);
         }
 
-        // 2. 创建分片存储目录（以任务ID命名），若已存在则跳过
+        // 创建分片存储目录（以任务ID命名），若已存在则跳过
         String chunkDirPath = this.path + File.separator + fileChunk.getTaskId();
         File directory = new File(chunkDirPath);
         if (!directory.exists() && !directory.mkdir()) {
             return Result.error(500, ResultMessage.CREATE_DIRECTORY_FAILED.getMessage(), null);
         }
 
-        // 3. Redis 判断该分片是否已经上传过，避免重复写入
+        // Redis 判断该分片是否已经上传过，避免重复写入
         if (cacheUtil.isChunkUploaded(fileChunk.getTaskId(), fileChunk.getChunkNumber())) {
             log.info("分片已上传，跳过: taskId={}, chunkNumber={}", fileChunk.getTaskId(), fileChunk.getChunkNumber());
             return Result.success(ResultMessage.CHUNK_SAVED_SUCCESS.getMessage());
         }
 
-        // 4. 将分片文件写入磁盘，文件名格式为 "{分片序号}.part"
+        // 将分片文件写入磁盘，文件名格式为 "{分片序号}.part"
         try {
             file.transferTo(new File(chunkDirPath + File.separator + fileChunk.getChunkNumber() + ".part"));
         } catch (Exception e) {
             return Result.error(500, ResultMessage.SAVE_CHUNK_FAILED.getMessage(), null);
         }
 
-        // 5. 分片信息暂存到 Redis Hash（合并前不再写数据库）
+        // 分片信息暂存到 Redis Hash（合并前不再写数据库）
         fileChunk.setChunkPath(fileChunk.getChunkNumber() + ".part");
         cacheUtil.putChunkInfo(fileChunk.getTaskId(), fileChunk);
 
-        // 6. 异步更新上传任务的已上传分片计数（仅做 DB 记录，合并条件由 Redis 判断）
-        executorService.execute(() -> {
-            fileUploadTaskMapper.update(null, new LambdaUpdateWrapper<FileUploadTask>().eq(FileUploadTask::getId, fileChunk.getTaskId()).setSql("uploaded_count = uploaded_count + 1"));
-        });
+        // 异步更新上传任务的已上传分片计数（仅做 DB 记录，合并条件由 Redis 判断）
+        executorService.execute(() ->
+                fileUploadTaskMapper.update(null,
+                        new LambdaUpdateWrapper<FileUploadTask>()
+                                .eq(FileUploadTask::getId, fileChunk.getTaskId())
+                                .setIncrBy(FileUploadTask::getUploadedCount, 1)));
 
-        // 7. 通过 Redis 判断是否所有分片均已上传完成（HLEN == total）
+
+        // 通过 Redis 判断是否所有分片均已上传完成（HLEN == total）
         long uploadedCount = cacheUtil.getUploadedChunkCount(fileChunk.getTaskId());
         Integer totalCount = cacheUtil.getTaskChunkCount(fileChunk.getTaskId());
 
-        // 8. 若尚未全部上传完成，直接返回成功
+        // 若尚未全部上传完成，直接返回成功
         if (totalCount == null || uploadedCount < totalCount) {
             return Result.success(ResultMessage.CHUNK_SAVED_SUCCESS.getMessage());
         }
 
-        // 9. 全部分片已就绪，同步执行合并（事务 1）
+        // 全部分片已就绪，同步执行合并
         Long taskId = fileChunk.getTaskId();
 
         // 原子性检查：只有获得 Redis 锁的线程执行合并
         String lockKey = "merge:" + taskId;
         String lockId = UUID.randomUUID().toString().substring(0, 8) + Thread.currentThread().getId();
+        // 尝试获取锁，若失败则直接返回成功
         if (!redisLock.lock(lockKey, lockId)) {
             return Result.success(ResultMessage.CHUNK_SAVED_SUCCESS.getMessage());
         }
         try {
-            // 10. 从 Redis Hash 读取全部分片信息，批量写入 file_chunk DB
+            // 从 Redis Hash 读取全部分片信息，批量写入 file_chunk DB
             List<FileChunk> chunkInfos = cacheUtil.getChunkInfos(taskId);
             if (!chunkInfos.isEmpty()) {
                 saveBatch(chunkInfos);
             }
 
-            // 11. 清理 Redis 分片缓存
+            // 清理 Redis 分片缓存
             cacheUtil.deleteChunkInfos(taskId);
 
-            // 12. 查询任务信息
+            // 查询任务信息
             FileUploadTask uploadTask = fileUploadTaskMapper.selectById(taskId);
             if (uploadTask == null) {
                 return Result.error(500, "上传任务不存在", null);
             }
 
-            // 13. 合并 .part 文件
+            // 合并 .part 文件
             String mergedName = mergeChunks(taskId);
             if (mergedName == null) {
                 return Result.error(500, ResultMessage.MERGE_CHUNKS_FAILED.getMessage(), null);
             }
 
-            // 14. 插入 FileInfo（status=1：上传成功未计算hash）
+            // 插入 FileInfo（status=1：上传成功未计算hash）
+            // 合并后的文件路径（任务ID/合并后的文件名）
             String fullPath = chunkDirPath + File.separator + mergedName;
             FileInfo fileInfo = new FileInfo();
-            fileInfo.setFileName(uploadTask.getFileName());
+            // 自动重命名：如果目标目录已存在同名文件，追加编号避免冲突
+            String uniqueName = fileDirectoryService.resolveUniqueFileName(
+                    uploadTask.getParentId(), uploadTask.getFileName());
+            // 复制文件信息到 FileInfo
+            BeanUtils.copyProperties(uploadTask, fileInfo);
+            fileInfo.setFileName(uniqueName);
             fileInfo.setFileSize(FileHashUtil.fileSize(fullPath));
-            fileInfo.setFileSuffix(uploadTask.getFileSuffix());
             fileInfo.setStoragePath(taskId + File.separator + mergedName);
-            fileInfo.setParentId(uploadTask.getParentId());
-            fileInfo.setCreateUser(uploadTask.getCreateUser());
             fileInfo.setStatus(1);
+            fileInfo.setId(null);
+            fileInfo.setFileSha256(null);
             fileInfoMapper.insert(fileInfo);
 
-            // 15. 更新任务 status=2（已合并待计算哈希）
-            Long fileInfoId = fileInfo.getId();
+            // 更新任务 status=2（已合并待计算哈希）
             uploadTask.setStatus(2);
             fileUploadTaskMapper.updateById(uploadTask);
 
-            // 16. 异步计算 SHA-256 并与前端哈希比较
+            // 等待文件信息插入成功后，异步计算 SHA-256 并与前端哈希比较
+            // 确保文件信息写入数据库，再计算哈希
             String finalStoragePath = taskId + File.separator + mergedName;
-            executorService.execute(() -> {
-                computeAndVerifyHash(taskId, finalStoragePath, fullPath, uploadTask.getFileSha256());
-            });
+            AfterCommitRunner.afterCommit(() -> executorService.execute(() ->
+                    computeAndVerifyHash(taskId, finalStoragePath, fullPath, uploadTask.getFileSha256())));
 
             return Result.success(ResultMessage.CHUNK_MERGED_SUCCESS.getMessage());
         } finally {
@@ -267,10 +283,10 @@ public class FileChunkServiceImpl extends ServiceImpl<FileChunkMapper, FileChunk
      * 哈希不一致 → 文件名追加"（文件损坏）"，任务标记失败（status=-1）
      * </p>
      *
-     * @param taskId         上传任务ID
-     * @param storagePath    文件存储路径
-     * @param fullPath       文件完整物理路径
-     * @param frontendHash   前端传入的 SHA-256（可为空）
+     * @param taskId       上传任务ID
+     * @param storagePath  文件存储路径
+     * @param fullPath     文件完整物理路径
+     * @param frontendHash 前端传入的 SHA-256（可为空）
      */
     private void computeAndVerifyHash(Long taskId, String storagePath, String fullPath, String frontendHash) {
         try {

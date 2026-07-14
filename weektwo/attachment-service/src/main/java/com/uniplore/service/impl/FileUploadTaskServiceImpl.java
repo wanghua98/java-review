@@ -32,26 +32,35 @@ public class FileUploadTaskServiceImpl extends ServiceImpl<FileUploadTaskMapper,
      */
     @Override
     public Result<FileUploadTask> initFile(FileUploadTask fileUploadTask) {
-        // 1. 检查文件是否已存在（通过 SHA-256 判断），实现秒传
-        FileInfo existing = fileInfoMapper.selectOne(
-                new QueryWrapper<FileInfo>()
-                        .eq("file_sha256", fileUploadTask.getFileSha256())
-                        .last("LIMIT 1")
-        );
-        if (existing != null) {
-            // 文件已存在，直接创建一条新的文件记录引用同一存储文件，无需上传
-            FileInfo newFileInfo = oldFileInfo(fileUploadTask, existing);
-            fileInfoMapper.insert(newFileInfo);
-            return Result.success(null);
+        // 1. 如果有 SHA-256，检查文件是否已存在（秒传）
+        String sha256 = fileUploadTask.getFileSha256();
+        if (sha256 != null && !sha256.isEmpty()) {
+            FileInfo existing = fileInfoMapper.selectOne(
+                    new QueryWrapper<FileInfo>()
+                            .eq("file_sha256", sha256)
+                            .last("LIMIT 1")
+            );
+            if (existing != null) {
+                // 文件已存在，直接创建一条新的文件记录引用同一存储文件，无需上传
+                FileInfo newFileInfo = oldFileInfo(fileUploadTask, existing);
+                fileInfoMapper.insert(newFileInfo);
+                // 秒传成功，返回 -1 表示无需上传
+                fileUploadTask.setId(-1L);
+                return Result.success(fileUploadTask);
+            }
         }
 
-        // 2. 文件不存在，创建上传任务走正常分片上传
+        // 2. 文件不存在（或无 SHA-256），创建上传任务走正常分片上传
+        // 空字符串 SHA-256 转为 null，避免数据库索引冲突
+        if (fileUploadTask.getFileSha256() != null && fileUploadTask.getFileSha256().isEmpty()) {
+            fileUploadTask.setFileSha256(null);
+        }
         fileUploadTask.setCreateUser(StpUtil.getLoginIdAsLong());
         fileUploadTask.setStatus(0);
         fileUploadTask.setUploadedCount(0);
         save(fileUploadTask);
 
-        return Result.success(getOne(new QueryWrapper<FileUploadTask>().eq("file_sha256", fileUploadTask.getFileSha256())));
+        return Result.success(getOne(new QueryWrapper<FileUploadTask>().eq("id", fileUploadTask.getId())));
     }
 
     /**

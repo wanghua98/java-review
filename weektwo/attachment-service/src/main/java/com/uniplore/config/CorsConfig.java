@@ -7,11 +7,12 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import org.springframework.web.filter.CorsFilter;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
+import java.util.Arrays;
+
 /**
  * CORS 跨域配置
  * <p>
- * 允许前端开发服务器（http://localhost:5173）跨域访问后端接口。
- * 生产环境请将 allowedOrigins 替换为实际前端域名。
+ * 开发环境下允许前端跨域访问后端接口，支持 localhost 和局域网 IP 访问。
  * </p>
  *
  * @author yf
@@ -23,8 +24,12 @@ public class CorsConfig implements WebMvcConfigurer {
     public CorsFilter corsFilter() {
         // CORS 配置
         CorsConfiguration config = new CorsConfiguration();
-        // 允许前端地址（Vite 默认端口 5173）
-        config.addAllowedOrigin("http://localhost:5173");
+        // 允许所有来源（开发环境），也可以写具体地址如 http://localhost:5173
+        config.setAllowedOriginPatterns(Arrays.asList(
+                "http://localhost:5173",
+                "http://127.0.0.1:5173",
+                "http://*:5173"
+        ));
         // 允许携带 Cookie（Sa-Token 需要）
         config.setAllowCredentials(true);
         // 允许所有请求头

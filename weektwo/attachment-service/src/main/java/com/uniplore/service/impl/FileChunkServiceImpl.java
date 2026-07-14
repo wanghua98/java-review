@@ -1,6 +1,7 @@
 package com.uniplore.service.impl;
 
 import cn.hutool.core.util.RandomUtil;
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.uniplore.mapper.FileChunkMapper;
@@ -27,7 +28,6 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.channels.FileChannel;
-import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
@@ -90,9 +90,9 @@ public class FileChunkServiceImpl extends ServiceImpl<FileChunkMapper, FileChunk
      */
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public Result<String> saveChunk(FileChunk fileChunk, MultipartFile file) throws IOException, NoSuchAlgorithmException {
+    public Result<String> saveChunk(FileChunk fileChunk, MultipartFile file) throws IOException {
 
-        // 1. 通过 Redis 校验上传任务是否存在（0 次 DB 查询）
+        // 1. 通过 Redis 校验上传任务是否存在
         if (!cacheUtil.isTaskExists(fileChunk.getTaskId())) {
             return Result.error(500, ResultMessage.TASK_NOT_FOUND.getMessage(), null);
         }
@@ -121,8 +121,10 @@ public class FileChunkServiceImpl extends ServiceImpl<FileChunkMapper, FileChunk
         fileChunk.setChunkPath(fileChunk.getChunkNumber() + ".part");
         cacheUtil.putChunkInfo(fileChunk.getTaskId(), fileChunk);
 
-        // 6. 更新上传任务的已上传分片计数（仅做 DB 记录，合并条件由 Redis 判断）
-        fileUploadTaskMapper.update(null, new LambdaUpdateWrapper<FileUploadTask>().eq(FileUploadTask::getId, fileChunk.getTaskId()).setSql("uploaded_count = uploaded_count + 1"));
+        // 6. 异步更新上传任务的已上传分片计数（仅做 DB 记录，合并条件由 Redis 判断）
+        executorService.execute(() -> {
+            fileUploadTaskMapper.update(null, new LambdaUpdateWrapper<FileUploadTask>().eq(FileUploadTask::getId, fileChunk.getTaskId()).setSql("uploaded_count = uploaded_count + 1"));
+        });
 
         // 7. 通过 Redis 判断是否所有分片均已上传完成（HLEN == total）
         long uploadedCount = cacheUtil.getUploadedChunkCount(fileChunk.getTaskId());
@@ -133,69 +135,64 @@ public class FileChunkServiceImpl extends ServiceImpl<FileChunkMapper, FileChunk
             return Result.success(ResultMessage.CHUNK_SAVED_SUCCESS.getMessage());
         }
 
-        // 9. 全部分片已就绪，更新任务状态为"上传完成"
-        fileUploadTaskMapper.update(null, new LambdaUpdateWrapper<FileUploadTask>()
-                .eq(FileUploadTask::getId, fileChunk.getTaskId())
-                .set(FileUploadTask::getStatus, 1));
-
-        // 10. 执行异步合并操作，合并后计算SHA256哈希值
+        // 9. 全部分片已就绪，同步执行合并（事务 1）
         Long taskId = fileChunk.getTaskId();
-        String lockKey = "merge_chunks_lock:" + taskId;
+
+        // 原子性检查：只有获得 Redis 锁的线程执行合并
+        String lockKey = "merge:" + taskId;
         String lockId = UUID.randomUUID().toString().substring(0, 8) + Thread.currentThread().getId();
-        // 获取锁
-        boolean isLocked = redisLock.lock(lockKey, lockId);
-        if (isLocked) {
-            Long finalTaskId = taskId;
-            CompletableFuture.runAsync(() -> {
-                try {
-                    // 1. 从 Redis Hash 读取全部分片信息，批量写入数据库
-                    List<FileChunk> chunkInfos = cacheUtil.getChunkInfos(finalTaskId);
-                    if (!chunkInfos.isEmpty()) {
-                        saveBatch(chunkInfos);
-                    }
-                    // 2. 清理 Redis 缓存
-                    cacheUtil.deleteChunkInfos(finalTaskId);
-
-                    // 3. 查询任务信息用于合并
-                    FileUploadTask uploadTask = fileUploadTaskMapper.selectById(finalTaskId);
-                    if (uploadTask == null) {
-                        throw new RuntimeException("上传任务不存在");
-                    }
-
-                    // 4. 合并分片
-                    String fileName = mergeChunks(finalTaskId);
-                    if (fileName == null) {
-                        throw new RuntimeException("合并分片失败");
-                    }
-                    String finalFilePath = chunkDirPath + File.separator + fileName;
-                    // 计算hash
-                    String sha256 = FileHashUtil.sha256(finalFilePath);
-                    // 重新计算文件大小
-                    long fileSize = FileHashUtil.fileSize(finalFilePath);
-                    FileInfo fileInfo = new FileInfo();
-                    // 文件信息字段
-                    fileInfo.setFileName(uploadTask.getFileName());
-                    fileInfo.setFileSuffix(uploadTask.getFileSuffix());
-                    fileInfo.setFileSha256(sha256);
-                    fileInfo.setFileSize(fileSize);
-                    fileInfo.setStoragePath(uploadTask.getId() + File.separator + fileName);
-                    fileInfo.setParentId(uploadTask.getParentId());
-                    fileInfo.setCreateUser(uploadTask.getCreateUser());
-                    fileInfo.setStatus(1);
-                    fileInfoMapper.insert(fileInfo);
-
-                    // 更新上传任务状态为"合并完成"
-                    uploadTask.setStatus(2);
-                    fileUploadTaskMapper.updateById(uploadTask);
-                } catch (Exception e) {
-                    log.error("合并分片失败，任务ID: {}, 错误信息: {}", finalTaskId, e.getMessage(), e);
-                } finally {
-                    redisLock.unlock(lockKey, lockId);
-                }
-            }, executorService);
+        if (!redisLock.lock(lockKey, lockId)) {
+            return Result.success(ResultMessage.CHUNK_SAVED_SUCCESS.getMessage());
         }
+        try {
+            // 10. 从 Redis Hash 读取全部分片信息，批量写入 file_chunk DB
+            List<FileChunk> chunkInfos = cacheUtil.getChunkInfos(taskId);
+            if (!chunkInfos.isEmpty()) {
+                saveBatch(chunkInfos);
+            }
 
-        return Result.success(ResultMessage.CHUNK_MERGED_SUCCESS.getMessage());
+            // 11. 清理 Redis 分片缓存
+            cacheUtil.deleteChunkInfos(taskId);
+
+            // 12. 查询任务信息
+            FileUploadTask uploadTask = fileUploadTaskMapper.selectById(taskId);
+            if (uploadTask == null) {
+                return Result.error(500, "上传任务不存在", null);
+            }
+
+            // 13. 合并 .part 文件
+            String mergedName = mergeChunks(taskId);
+            if (mergedName == null) {
+                return Result.error(500, ResultMessage.MERGE_CHUNKS_FAILED.getMessage(), null);
+            }
+
+            // 14. 插入 FileInfo（status=1：上传成功未计算hash）
+            String fullPath = chunkDirPath + File.separator + mergedName;
+            FileInfo fileInfo = new FileInfo();
+            fileInfo.setFileName(uploadTask.getFileName());
+            fileInfo.setFileSize(FileHashUtil.fileSize(fullPath));
+            fileInfo.setFileSuffix(uploadTask.getFileSuffix());
+            fileInfo.setStoragePath(taskId + File.separator + mergedName);
+            fileInfo.setParentId(uploadTask.getParentId());
+            fileInfo.setCreateUser(uploadTask.getCreateUser());
+            fileInfo.setStatus(1);
+            fileInfoMapper.insert(fileInfo);
+
+            // 15. 更新任务 status=2（已合并待计算哈希）
+            Long fileInfoId = fileInfo.getId();
+            uploadTask.setStatus(2);
+            fileUploadTaskMapper.updateById(uploadTask);
+
+            // 16. 异步计算 SHA-256 并与前端哈希比较
+            String finalStoragePath = taskId + File.separator + mergedName;
+            executorService.execute(() -> {
+                computeAndVerifyHash(taskId, finalStoragePath, fullPath, uploadTask.getFileSha256());
+            });
+
+            return Result.success(ResultMessage.CHUNK_MERGED_SUCCESS.getMessage());
+        } finally {
+            redisLock.unlock(lockKey, lockId);
+        }
     }
 
     /**
@@ -261,5 +258,59 @@ public class FileChunkServiceImpl extends ServiceImpl<FileChunkMapper, FileChunk
             throw e;
         }
         return fileName;
+    }
+
+    /**
+     * 异步计算文件 SHA-256 并与前端传入的哈希比较
+     * <p>
+     * 哈希一致 → 更新 FileInfo.sha256，任务标记完成（status=3）
+     * 哈希不一致 → 文件名追加"（文件损坏）"，任务标记失败（status=-1）
+     * </p>
+     *
+     * @param taskId         上传任务ID
+     * @param storagePath    文件存储路径
+     * @param fullPath       文件完整物理路径
+     * @param frontendHash   前端传入的 SHA-256（可为空）
+     */
+    private void computeAndVerifyHash(Long taskId, String storagePath, String fullPath, String frontendHash) {
+        try {
+            // 计算文件 SHA-256
+            String computedHash = FileHashUtil.sha256(fullPath);
+
+            // 查询 FileInfo
+            FileInfo fileInfo = fileInfoMapper.selectOne(
+                    new QueryWrapper<FileInfo>().eq("storage_path", storagePath)
+            );
+            if (fileInfo == null) {
+                log.error("哈希校验：FileInfo 不存在，storagePath: {}", storagePath);
+                return;
+            }
+
+            // 查询任务
+            FileUploadTask task = fileUploadTaskMapper.selectById(taskId);
+            if (task == null) {
+                log.error("哈希校验：任务不存在，taskId: {}", taskId);
+                return;
+            }
+
+            if (frontendHash != null && frontendHash.equals(computedHash)) {
+                // 哈希一致
+                fileInfo.setFileSha256(computedHash);
+                fileInfoMapper.updateById(fileInfo);
+                task.setStatus(3);
+                log.info("文件哈希校验通过，taskId: {}, fileName: {}", taskId, fileInfo.getFileName());
+            } else {
+                // 哈希不一致，文件名追加损坏标记
+                log.warn("文件哈希校验不通过，taskId: {}, frontendHash: {}, computedHash: {}",
+                        taskId, frontendHash, computedHash);
+                fileInfo.setFileName(fileInfo.getFileName() + "（文件损坏）");
+                fileInfoMapper.updateById(fileInfo);
+                task.setStatus(-1);
+            }
+            fileUploadTaskMapper.updateById(task);
+
+        } catch (Exception e) {
+            log.error("哈希校验失败，taskId: {}", taskId, e);
+        }
     }
 }

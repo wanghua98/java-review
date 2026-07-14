@@ -53,7 +53,7 @@ public class FileInfo {
      */
     private Long createUser;
     /**
-     * 文件状态（1：正常，0：已删除）
+     * 文件状态（-1：文件损坏，0：已删除，1：上传成功未计算hash，3：计算完hash正常可用）
      */
     private Integer status;
     /**

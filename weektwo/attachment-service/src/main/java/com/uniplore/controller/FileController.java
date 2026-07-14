@@ -195,7 +195,7 @@ public class FileController {
 
         // 查询文件信息
         FileInfo fileInfo = fileInfoMapper.selectById(fileId);
-        if (fileInfo == null || fileInfo.getStatus() != 1) {
+        if (fileInfo == null || fileInfo.getStatus() == null || fileInfo.getStatus() < 1) {
             return ResponseEntity.badRequest().build();
         }
 

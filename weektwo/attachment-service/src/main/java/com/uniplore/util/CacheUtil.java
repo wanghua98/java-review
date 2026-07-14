@@ -28,10 +28,14 @@ public class CacheUtil {
     private final RedisLock redisLock;
     private final StringRedisTemplate stringRedisTemplate;
 
-    /** 分片上传任务缓存前缀（Hash 结构，一个任务一个 key） */
+    /**
+     * 分片上传任务缓存前缀（Hash 结构，一个任务一个 key）
+     */
     private static final String CHUNK_TASK_PREFIX = "chunk:task";
 
-    /** 任务分片总数缓存后缀 */
+    /**
+     * 任务分片总数缓存后缀
+     */
     private static final String CHUNK_TASK_COUNT_SUFFIX = ":cnt";
 
     /**
@@ -57,8 +61,8 @@ public class CacheUtil {
      * field 为分片编号，value 为 FileChunk 的 JSON。
      * </p>
      *
-     * @param taskId  上传任务ID
-     * @param chunk   分片信息
+     * @param taskId 上传任务ID
+     * @param chunk  分片信息
      */
     public void putChunkInfo(Long taskId, FileChunk chunk) {
         String key = CHUNK_TASK_PREFIX + ":" + taskId;
@@ -95,9 +99,9 @@ public class CacheUtil {
      * @param taskId 上传任务ID
      */
     public void deleteChunkInfos(Long taskId) {
-        String key = CHUNK_TASK_PREFIX + ":" + taskId;
-        stringRedisTemplate.delete(key);
-        stringRedisTemplate.delete(key + CHUNK_TASK_COUNT_SUFFIX);
+        String prefix = CHUNK_TASK_PREFIX + ":" + taskId;
+        stringRedisTemplate.delete(prefix);
+        stringRedisTemplate.delete(prefix + CHUNK_TASK_COUNT_SUFFIX);
     }
 
     /**
@@ -127,14 +131,14 @@ public class CacheUtil {
     }
 
     /**
-     * 判断上传任务是否存在（Redis 中是否有该任务的 Hash）
+     * 判断上传任务是否存在 Redis中是否有该任务的总数
      *
      * @param taskId 上传任务ID
      * @return true 表示任务存在
      */
     public boolean isTaskExists(Long taskId) {
-        String key = CHUNK_TASK_PREFIX + ":" + taskId;
-        return Boolean.TRUE.equals(stringRedisTemplate.hasKey(key));
+        String key = CHUNK_TASK_PREFIX + ":" + taskId + CHUNK_TASK_COUNT_SUFFIX;
+        return stringRedisTemplate.opsForValue().get(key) != null;
     }
 
     /**
@@ -184,7 +188,7 @@ public class CacheUtil {
      * 从缓存中获取数据（互斥锁防止缓存击穿）
      */
     public <T, R> R getCacheWithMutex(String prefix, T key, Function<T, R> function,
-                                       Class<R> resultType, Long time, TimeUnit timeUnit) {
+                                      Class<R> resultType, Long time, TimeUnit timeUnit) {
         String newKey = prefix + ":" + key;
         String s = stringRedisTemplate.opsForValue().get(newKey);
 

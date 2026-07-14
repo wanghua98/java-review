@@ -157,7 +157,7 @@ public class FileController {
      * @return 目录文件列表
      */
     @GetMapping("/dir/list/{dirId}")
-    public Result<DirectoryVO> getDirList(@PathVariable("dirId") Long dirId) {
+    public Result<DirectoryVO> getDirList(@PathVariable Long dirId) {
         // 检查用户是否登录
         if (!StpUtil.isLogin()) {
             return Result.error(400, "用户未登录", null);

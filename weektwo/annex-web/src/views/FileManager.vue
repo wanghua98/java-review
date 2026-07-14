@@ -164,7 +164,7 @@ async function handleUpload(event) {
       uploadProgress.value = i
     }
 
-    uploadMsg.value = file.name + ' 上传成功'
+    uploadMsg.value = file.name + ' 上传成功，后台正在处理你的文件请稍后查看'
     loadDir(currentDir.value.id)
   } catch (e) {
     uploadMsg.value = '上传出错: ' + e.message
@@ -175,7 +175,7 @@ async function handleUpload(event) {
 }
 
 /**
- * 分片计算 SHA-256（高速版）
+ * 分片计算 SHA-256
  * @param {File} file          - 文件对象
  * @param {number} chunkSize   - 每块大小（字节），默认 8MB
  * @returns {Promise<string>}  - 十六进制哈希

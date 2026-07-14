@@ -72,6 +72,7 @@ public class FileDirectoryServiceImpl extends ServiceImpl<FileDirectoryMapper, F
         return getOne(new QueryWrapper<FileDirectory>()
                 .eq("create_user", userId)
                 .eq("status", 1)
+                .orderByAsc("id")
                 .last("LIMIT 1"));
     }
 

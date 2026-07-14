@@ -53,7 +53,7 @@ public enum ResultMessage {
     /**
      * 分片保存成功且已完成合并
      */
-    CHUNK_MERGED_SUCCESS("分片保存并合并成功");
+    CHUNK_MERGED_SUCCESS("分片保存成功,后台正在进行合并");
 
     /**
      * 消息文本

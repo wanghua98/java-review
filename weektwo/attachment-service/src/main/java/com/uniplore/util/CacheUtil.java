@@ -2,12 +2,16 @@ package com.uniplore.util;
 
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONUtil;
+import com.uniplore.pojo.FileChunk;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
  * 缓存工具类
@@ -24,30 +28,71 @@ public class CacheUtil {
     private final RedisLock redisLock;
     private final StringRedisTemplate stringRedisTemplate;
 
-    /** 分片上传记录的缓存前缀 */
-    private static final String CHUNK_PREFIX = "chunk";
+    /** 分片上传任务缓存前缀（Hash 结构，一个任务一个 key） */
+    private static final String CHUNK_TASK_PREFIX = "chunk:task";
 
     /**
-     * 判断分片是否已经上传过
+     * 判断分片是否已上传
+     * <p>
+     * 通过 Hash field 是否存在判断，O(1) 时间复杂度。
+     * 一个上传任务只对应一个 Redis key。
+     * </p>
      *
      * @param taskId      上传任务ID
      * @param chunkNumber 分片编号
      * @return true 表示已上传，false 表示未上传
      */
     public boolean isChunkUploaded(Long taskId, Integer chunkNumber) {
-        String key = CHUNK_PREFIX + ":" + taskId + ":" + chunkNumber;
-        return Boolean.TRUE.equals(stringRedisTemplate.hasKey(key));
+        String key = CHUNK_TASK_PREFIX + ":" + taskId;
+        return Boolean.TRUE.equals(stringRedisTemplate.opsForHash().hasKey(key, chunkNumber.toString()));
     }
 
     /**
-     * 标记分片已上传
+     * 存储分片信息到 Redis Hash
+     * <p>
+     * 合并前只存 Redis，不写数据库；合并时再批量写入。
+     * field 为分片编号，value 为 FileChunk 的 JSON。
+     * </p>
      *
-     * @param taskId      上传任务ID
-     * @param chunkNumber 分片编号
+     * @param taskId  上传任务ID
+     * @param chunk   分片信息
      */
-    public void markChunkUploaded(Long taskId, Integer chunkNumber) {
-        String key = CHUNK_PREFIX + ":" + taskId + ":" + chunkNumber;
-        stringRedisTemplate.opsForValue().set(key, "1", 1, TimeUnit.DAYS);
+    public void putChunkInfo(Long taskId, FileChunk chunk) {
+        String key = CHUNK_TASK_PREFIX + ":" + taskId;
+        stringRedisTemplate.opsForHash().put(key, chunk.getChunkNumber().toString(), JSONUtil.toJsonStr(chunk));
+        stringRedisTemplate.expire(key, 1, TimeUnit.DAYS);
+    }
+
+    /**
+     * 获取某任务的全部分片信息
+     * <p>
+     * 合并前调用，从 Redis Hash 读出所有分片信息，用于批量写入数据库。
+     * </p>
+     *
+     * @param taskId 上传任务ID
+     * @return 分片信息列表
+     */
+    public List<FileChunk> getChunkInfos(Long taskId) {
+        String key = CHUNK_TASK_PREFIX + ":" + taskId;
+        List<Object> values = stringRedisTemplate.opsForHash().values(key);
+        if (values == null || values.isEmpty()) {
+            return new ArrayList<>();
+        }
+        return values.stream()
+                .map(v -> JSONUtil.toBean(v.toString(), FileChunk.class))
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * 删除某任务的全部分片缓存
+     * <p>
+     * 合并成功后调用，清理 Redis 中该任务的 Hash。
+     * </p>
+     *
+     * @param taskId 上传任务ID
+     */
+    public void deleteChunkInfos(Long taskId) {
+        stringRedisTemplate.delete(CHUNK_TASK_PREFIX + ":" + taskId);
     }
 
     /**

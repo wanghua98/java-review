@@ -78,6 +78,9 @@ public class FileChunkServiceImpl extends ServiceImpl<FileChunkMapper, FileChunk
     @Transactional(rollbackFor = Exception.class)
     public Result<String> saveChunk(FileChunk fileChunk, MultipartFile file) throws IOException, NoSuchAlgorithmException {
 
+        // TODO 1.任务初始化上传时创建任务并缓存到redis 2. 分片上传时去redis中校验任务是否存在
+        //  校验使用redis进行缓存分片信息也存储在redis中
+
         // 1. 校验上传任务是否存在且处于"上传中"状态
         FileUploadTask fileUploadTask = fileUploadTaskMapper.selectById(fileChunk.getTaskId());
         if (fileUploadTask == null) {
@@ -111,7 +114,7 @@ public class FileChunkServiceImpl extends ServiceImpl<FileChunkMapper, FileChunk
         cacheUtil.markChunkUploaded(fileChunk.getTaskId(), fileChunk.getChunkNumber());
 
         // 6. 持久化分片元信息到数据库
-        fileChunk.setChunkPath( fileChunk.getChunkNumber() + ".part");
+        fileChunk.setChunkPath(fileChunk.getChunkNumber() + ".part");
         if (!save(fileChunk)) {
             return Result.error(500, ResultMessage.SAVE_CHUNK_INFO_FAILED.getMessage(), null);
         }
@@ -139,7 +142,7 @@ public class FileChunkServiceImpl extends ServiceImpl<FileChunkMapper, FileChunk
         // 10. 所有分片已就绪，执行合并
         String fileName = mergeChunks(fileChunk.getTaskId());
         if (fileName != null) {
-            String finalFilePath =  chunkDirPath + File.separator + fileName;
+            String finalFilePath = chunkDirPath + File.separator + fileName;
             log.info("分片合并成功，任务ID: {}, 合并后的文件名: {}", fileChunk.getTaskId(), fileName);
             // 向文件信息表上传文件信息
             FileInfo fileInfo = new FileInfo();
@@ -153,6 +156,7 @@ public class FileChunkServiceImpl extends ServiceImpl<FileChunkMapper, FileChunk
             fileInfo.setFileSha256(FileHashUtil.sha256(finalFilePath));
             fileInfo.setStoragePath(fileUploadTask.getId() + File.separator + fileName);
             fileInfo.setCreateUser(fileUploadTask.getCreateUser());
+            fileInfo.setParentId(fileUploadTask.getParentId());
 
             fileInfoMapper.insert(fileInfo);
 

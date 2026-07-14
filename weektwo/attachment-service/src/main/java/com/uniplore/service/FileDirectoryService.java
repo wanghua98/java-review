@@ -1,7 +1,10 @@
 package com.uniplore.service;
 
 import com.baomidou.mybatisplus.extension.service.IService;
+import com.uniplore.pojo.DirectoryVO;
 import com.uniplore.pojo.FileDirectory;
+
+import java.util.List;
 
 /**
  * 目录Service接口
@@ -42,4 +45,79 @@ public interface FileDirectoryService extends IService<FileDirectory> {
      * @return 更新后的目录
      */
     FileDirectory renameUserDirectory(Long userId, String newName);
+
+    /**
+     * 获取当前用户目录下的文件夹以及文件
+     * <p>
+     * 查询当前登录用户的个人目录，并返回其下的子目录列表和文件列表。
+     * </p>
+     *
+     * @param userId 当前用户ID
+     * @return 目录文件列表，若用户目录不存在返回null
+     */
+    DirectoryVO getUserDirectoryContents(Long userId);
+
+    /**
+     * 查看指定目录下的子目录和文件
+     * <p>
+     * 根据目录ID查询其下的子目录（按 sort 正序）和文件（按 create_time 倒序）。
+     * </p>
+     *
+     * @param directoryId 目录ID
+     * @return 目录文件列表，若目录不存在返回null
+     */
+    DirectoryVO getDirectoryContents(Long directoryId);
+
+    /**
+     * 在指定目录下创建子目录
+     * <p>
+     * 在当前用户的指定父目录下创建一个新的子目录。
+     * </p>
+     *
+     * @param parentId 父目录ID
+     * @param name     目录名称
+     * @param userId   当前用户ID
+     * @return 创建的目录
+     * @throws IllegalArgumentException 父目录不存在或名称重复
+     */
+    FileDirectory createSubDirectory(Long parentId, String name, Long userId);
+
+    /**
+     * 获取当前用户的所有目录（平铺列表）
+     * <p>
+     * 用于前端移动文件时展示所有可选目录。
+     * </p>
+     *
+     * @param userId 用户ID
+     * @return 目录列表
+     */
+    List<FileDirectory> getAllUserDirectories(Long userId);
+
+    /**
+     * 删除文件
+     * <p>
+     * 将指定文件标记为已删除状态（软删除，status=0），
+     * 物理文件保留磁盘以供其他引用（秒传复用）继续访问。
+     * </p>
+     *
+     * @param fileId 文件ID
+     * @param userId 当前用户ID（用于校验所有权）
+     * @return true 删除成功
+     * @throws IllegalArgumentException 文件不存在或无权操作
+     */
+    boolean deleteFile(Long fileId, Long userId);
+
+    /**
+     * 删除目录
+     * <p>
+     * 递归删除指定目录及其下所有文件和子目录（全部为软删除，status=0）。
+     * 不允许删除根目录（parent_id=0）和用户个人目录。
+     * </p>
+     *
+     * @param dirId  目录ID
+     * @param userId 当前用户ID（用于校验所有权）
+     * @return true 删除成功
+     * @throws IllegalArgumentException 目录不存在或无权操作
+     */
+    boolean deleteDirectory(Long dirId, Long userId);
 }

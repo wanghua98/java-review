@@ -53,7 +53,7 @@ CREATE TABLE `file_directory` (
 DROP TABLE IF EXISTS `file_upload_task`;
 CREATE TABLE `file_upload_task` (
                                     `id`             BIGINT       NOT NULL AUTO_INCREMENT COMMENT '上传任务ID',
-                                    `file_sha256`    VARCHAR(64)  NOT NULL                 COMMENT '文件SHA-256（用于秒传校验及唯一标识）',
+                                    `file_sha256`    VARCHAR(64)                  COMMENT '文件SHA-256（用于秒传校验及唯一标识）',
                                     `file_name`      VARCHAR(255) NOT NULL                 COMMENT '文件名称',
                                     `file_size`      BIGINT       NOT NULL                 COMMENT '文件大小（单位：字节）',
                                     `file_suffix`    VARCHAR(20)  DEFAULT NULL             COMMENT '文件后缀（不含点）',

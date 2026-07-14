@@ -1,16 +1,29 @@
 package com.uniplore.controller;
 
-import com.uniplore.pojo.FileChunk;
-import com.uniplore.pojo.FileUploadTask;
+import cn.dev33.satoken.stp.StpUtil;
+import com.uniplore.pojo.*;
 import com.uniplore.result.Result;
 import com.uniplore.service.FileChunkService;
+import com.uniplore.service.FileDirectoryService;
 import com.uniplore.service.FileUploadTaskService;
+import com.uniplore.mapper.FileInfoMapper;
+import com.uniplore.util.FileHashUtil;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.FileSystemResource;
+import org.springframework.core.io.Resource;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.File;
 import java.io.IOException;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.security.NoSuchAlgorithmException;
+import java.util.List;
 
 /**
  * 文件相关接口控制器
@@ -31,14 +44,37 @@ public class FileController {
      */
     private final FileUploadTaskService fileUploadTaskService;
 
+    /**
+     * 目录服务
+     */
+    private final FileDirectoryService fileDirectoryService;
+
+    /**
+     * 上传文件物理存储路径
+     */
+    @Value("${file.upload-path}")
+    private String uploadPath;
+
+    /**
+     * 文件信息Mapper
+     */
+    private final FileInfoMapper fileInfoMapper;
 
 
     /**
      * 文件初始化接口
+     * <p>
+     * 前端上传文件前先调用此接口初始化上传任务，返回任务ID等信息用于后续分片上传。
+     * 若文件已存在（SHA-256匹配）则直接秒传，无需实际上传。
+     * </p>
+     *
+     * @param fileUploadTask 文件上传任务信息（含fileName、fileSha256、fileSize、chunkCount等）
+     * @return 上传任务信息（含任务ID）
      */
     @PostMapping("/init")
     public Result<FileUploadTask> initFile(@RequestBody FileUploadTask fileUploadTask) {
-        if(fileUploadTask.getFileSha256() == null || fileUploadTask.getFileName() == null) {
+        // 校验必要参数（SHA-256 可为空，大文件由后端在合并时计算）
+        if (fileUploadTask.getFileName() == null) {
             return Result.error(400, "参数有误", null);
         }
         return fileUploadTaskService.initFile(fileUploadTask);
@@ -47,10 +83,15 @@ public class FileController {
 
     /**
      * 上传分片接口
+     * <p>
+     * 接收单个分片文件，保存到本地临时目录。
+     * 若该分片已通过 Redis 判重则直接跳过。
+     * 当所有分片上传完成后自动触发合并操作。
+     * </p>
      *
-     * @param taskId      任务ID
-     * @param chunkNumber 分片编号
-     * @param file        分片文件
+     * @param taskId      上传任务ID
+     * @param chunkNumber 分片编号（从1开始）
+     * @param file        分片文件内容
      * @return 上传结果
      */
     @PostMapping("/upload")
@@ -58,7 +99,7 @@ public class FileController {
                                       @RequestParam("chunkNumber") Integer chunkNumber,
                                       @RequestParam("file") MultipartFile file) throws IOException, NoSuchAlgorithmException {
 
-        //参数校验
+        // 参数校验
         if (file == null || taskId == null || chunkNumber == null) {
             return Result.error(400, "参数有误", null);
         }
@@ -78,5 +119,288 @@ public class FileController {
         fileChunk.setChunkNumber(chunkNumber);
         // 保存分片文件
         return fileChunkService.saveChunk(fileChunk, file);
+    }
+
+
+    /**
+     * 获取当前用户目录下的文件夹以及文件
+     * <p>
+     * 查询当前登录用户的个人目录，返回其下的子目录列表（按sort排序）和文件列表（按上传时间倒序）。
+     * 用于前端登录后展示用户的文件管理首页。
+     * </p>
+     *
+     * @return 目录文件列表
+     */
+    @GetMapping("/dir/list")
+    public Result<DirectoryVO> getUserDirList() {
+        // 检查用户是否登录
+        if (!StpUtil.isLogin()) {
+            return Result.error(400, "用户未登录", null);
+        }
+        // 查询当前用户目录下内容
+        DirectoryVO vo = fileDirectoryService.getUserDirectoryContents(StpUtil.getLoginIdAsLong());
+        if (vo == null) {
+            return Result.error(400, "用户目录不存在", null);
+        }
+        return Result.success(vo);
+    }
+
+
+    /**
+     * 查看指定目录下的文件以及目录
+     * <p>
+     * 根据目录ID查询其下的子目录和文件列表。
+     * 前端点击目录树或面包屑导航时调用此接口进入子目录。
+     * </p>
+     *
+     * @param dirId 目录ID
+     * @return 目录文件列表
+     */
+    @GetMapping("/dir/list/{dirId}")
+    public Result<DirectoryVO> getDirList(@PathVariable("dirId") Long dirId) {
+        // 检查用户是否登录
+        if (!StpUtil.isLogin()) {
+            return Result.error(400, "用户未登录", null);
+        }
+        // 参数校验
+        if (dirId == null || dirId <= 0) {
+            return Result.error(400, "参数有误", null);
+        }
+        // 查询指定目录下内容
+        DirectoryVO vo = fileDirectoryService.getDirectoryContents(dirId);
+        if (vo == null) {
+            return Result.error(400, "目录不存在", null);
+        }
+        return Result.success(vo);
+    }
+
+
+    /**
+     * 下载文件
+     * <p>
+     * 根据文件ID查询文件信息，从存储路径读取文件并返回下载流。
+     * 同时记录文件下载操作日志。
+     * </p>
+     *
+     * @param fileId 文件ID
+     * @return 文件下载响应
+     */
+    @GetMapping("/download/{fileId}")
+    public ResponseEntity<Resource> downloadFile(@PathVariable Long fileId) throws IOException {
+        // 检查用户是否登录
+        if (!StpUtil.isLogin()) {
+            // 未登录用户尝试下载文件，返回错误
+            return ResponseEntity.badRequest().build();
+        }
+
+        // 查询文件信息
+        FileInfo fileInfo = fileInfoMapper.selectById(fileId);
+        if (fileInfo == null || fileInfo.getStatus() != 1) {
+            return ResponseEntity.badRequest().build();
+        }
+
+        // 拼接完整存储路径
+        String storagePath = fileInfo.getStoragePath();
+        String fullPath = uploadPath + File.separator + storagePath;
+        File file = new File(fullPath);
+
+        // 检查文件是否存在
+        if (!file.exists() || !file.isFile()) {
+            return ResponseEntity.badRequest().build();
+        }
+
+        // 创建文件资源
+        FileSystemResource resource = new FileSystemResource(file);
+
+        // 设置响应头
+        HttpHeaders headers = new HttpHeaders();
+        // 文件名URL编码，支持中文文件名
+        String encodedFileName = URLEncoder.encode(fileInfo.getFileName(), StandardCharsets.UTF_8)
+                .replace("+", "%20");
+        headers.add(HttpHeaders.CONTENT_DISPOSITION,
+                "attachment; filename*=UTF-8''" + encodedFileName);
+        // 根据文件后缀设置 Content-Type
+        MediaType mediaType = getMediaType(fileInfo.getFileSuffix());
+
+        return ResponseEntity.ok()
+                .headers(headers)
+                .contentLength(file.length())
+                .contentType(mediaType)
+                .body(resource);
+    }
+
+
+    /**
+     * 在指定目录下新建子目录
+     * <p>
+     * 在父目录下创建一个新的子目录，名称不能和同级目录重复。
+     * </p>
+     *
+     * @param parentId 父目录ID
+     * @param name     目录名称
+     * @return 创建结果
+     */
+    @PostMapping("/dir/create")
+    public Result<FileDirectory> createDir(@RequestParam("parentId") Long parentId,
+                                           @RequestParam("name") String name) {
+        // 检查用户是否登录
+        if (!StpUtil.isLogin()) {
+            return Result.error(400, "用户未登录", null);
+        }
+        // 参数校验
+        if (name == null || name.trim().isEmpty()) {
+            return Result.error(400, "目录名称不能为空", null);
+        }
+        try {
+            FileDirectory dir = fileDirectoryService.createSubDirectory(
+                    parentId, name.trim(), StpUtil.getLoginIdAsLong());
+            return Result.success(dir);
+        } catch (IllegalArgumentException e) {
+            return Result.error(400, e.getMessage(), null);
+        }
+    }
+
+
+    /**
+     * 获取当前用户的所有目录列表
+     * <p>
+     * 查询当前用户创建的所有目录（平铺列表，按父目录、sort 排序）。
+     * 用于前端移动文件时展示所有可选目录。
+     * </p>
+     *
+     * @return 目录列表
+     */
+    @GetMapping("/dir/all")
+    public Result<List<FileDirectory>> getAllDirs() {
+        if (!StpUtil.isLogin()) {
+            return Result.error(400, "用户未登录", null);
+        }
+        List<FileDirectory> dirs = fileDirectoryService.getAllUserDirectories(StpUtil.getLoginIdAsLong());
+        return Result.success(dirs);
+    }
+
+
+    /**
+     * 移动文件到其他目录
+     * <p>
+     * 将指定文件移动到目标目录下（只更新数据库中的 parent_id，不移动磁盘文件）。
+     * </p>
+     *
+     * @param fileId      文件ID
+     * @param targetDirId 目标目录ID
+     * @return 移动结果
+     */
+    @PostMapping("/move")
+    public Result<String> moveFile(@RequestParam("fileId") Long fileId,
+                                   @RequestParam("targetDirId") Long targetDirId) {
+        // 检查用户是否登录
+        if (!StpUtil.isLogin()) {
+            return Result.error(400, "用户未登录", null);
+        }
+        // 查询文件是否存在
+        FileInfo fileInfo = fileInfoMapper.selectById(fileId);
+        if (fileInfo == null) {
+            return Result.error(400, "文件不存在", null);
+        }
+        // 检查目标目录是否存在
+        FileDirectory targetDir = fileDirectoryService.getById(targetDirId);
+        if (targetDir == null) {
+            return Result.error(400, "目标目录不存在", null);
+        }
+        // 更新文件所在目录
+        fileInfo.setParentId(targetDirId);
+        fileInfoMapper.updateById(fileInfo);
+
+        return Result.success("移动成功");
+    }
+
+
+    /**
+     * 删除文件
+     * <p>
+     * 将指定文件标记为已删除状态（软删除，status=0），
+     * 物理文件保留磁盘以供其他引用（秒传复用）继续访问。
+     * 只有文件的上传者才能删除。
+     * </p>
+     *
+     * @param fileId 文件ID
+     * @return 删除结果
+     */
+    @PostMapping("/delete/{fileId}")
+    public Result<String> deleteFile(@PathVariable Long fileId) {
+        // 检查用户是否登录
+        if (!StpUtil.isLogin()) {
+            return Result.error(400, "用户未登录", null);
+        }
+        try {
+            fileDirectoryService.deleteFile(fileId, StpUtil.getLoginIdAsLong());
+            return Result.success("删除成功");
+        } catch (IllegalArgumentException e) {
+            return Result.error(400, e.getMessage(), null);
+        }
+    }
+
+
+    /**
+     * 删除目录
+     * <p>
+     * 递归删除指定目录及其下所有文件和子目录（软删除）。
+     * 不允许删除根目录和用户个人目录。
+     * </p>
+     *
+     * @param dirId 目录ID
+     * @return 删除结果
+     */
+    @PostMapping("/dir/delete/{dirId}")
+    public Result<String> deleteDir(@PathVariable Long dirId) {
+        // 检查用户是否登录
+        if (!StpUtil.isLogin()) {
+            return Result.error(400, "用户未登录", null);
+        }
+        try {
+            fileDirectoryService.deleteDirectory(dirId, StpUtil.getLoginIdAsLong());
+            return Result.success("删除成功");
+        } catch (IllegalArgumentException e) {
+            return Result.error(400, e.getMessage(), null);
+        }
+    }
+
+
+    /**
+     * 根据文件后缀获取对应的 MediaType
+     * <p>
+     * 支持常见文件类型的 MIME 映射，默认返回 application/octet-stream。
+     * </p>
+     *
+     * @param suffix 文件后缀（如 "jpg"、"pdf"、"zip"），不含点
+     * @return MediaType 对象
+     */
+    private MediaType getMediaType(String suffix) {
+        if (suffix == null) {
+            return MediaType.APPLICATION_OCTET_STREAM;
+        }
+        return switch (suffix.toLowerCase()) {
+            case "jpg", "jpeg" -> MediaType.IMAGE_JPEG;
+            case "png" -> MediaType.IMAGE_PNG;
+            case "gif" -> MediaType.IMAGE_GIF;
+            case "bmp" -> MediaType.valueOf("image/bmp");
+            case "webp" -> MediaType.valueOf("image/webp");
+            case "svg" -> MediaType.valueOf("image/svg+xml");
+            case "mp4" -> MediaType.valueOf("video/mp4");
+            case "avi" -> MediaType.valueOf("video/x-msvideo");
+            case "mov" -> MediaType.valueOf("video/quicktime");
+            case "mp3" -> MediaType.valueOf("audio/mpeg");
+            case "wav" -> MediaType.valueOf("audio/wav");
+            case "pdf" -> MediaType.valueOf("application/pdf");
+            case "doc", "docx" -> MediaType.valueOf("application/msword");
+            case "xls", "xlsx" -> MediaType.valueOf("application/vnd.ms-excel");
+            case "ppt", "pptx" -> MediaType.valueOf("application/vnd.ms-powerpoint");
+            case "zip" -> MediaType.valueOf("application/zip");
+            case "rar" -> MediaType.valueOf("application/vnd.rar");
+            case "txt" -> MediaType.valueOf("text/plain");
+            case "json" -> MediaType.valueOf("application/json");
+            case "xml" -> MediaType.valueOf("application/xml");
+            default -> MediaType.APPLICATION_OCTET_STREAM;
+        };
     }
 }

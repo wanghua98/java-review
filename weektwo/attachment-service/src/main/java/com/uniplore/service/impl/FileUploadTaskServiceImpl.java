@@ -9,6 +9,7 @@ import com.uniplore.pojo.FileInfo;
 import com.uniplore.pojo.FileUploadTask;
 import com.uniplore.result.Result;
 import com.uniplore.service.FileUploadTaskService;
+import com.uniplore.util.CacheUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Service;
@@ -23,6 +24,8 @@ import org.springframework.stereotype.Service;
 public class FileUploadTaskServiceImpl extends ServiceImpl<FileUploadTaskMapper, FileUploadTask> implements FileUploadTaskService {
 
     private final FileInfoMapper fileInfoMapper;
+
+    private final CacheUtil cacheUtil;
 
     /**
      * 初始化文件上传任务
@@ -59,6 +62,9 @@ public class FileUploadTaskServiceImpl extends ServiceImpl<FileUploadTaskMapper,
         fileUploadTask.setStatus(0);
         fileUploadTask.setUploadedCount(0);
         save(fileUploadTask);
+
+        // 将分片总数写入 Redis，供 saveChunk 通过 Redis 判断是否全部上传完成
+        cacheUtil.putTaskMeta(fileUploadTask.getId(), fileUploadTask.getChunkCount());
 
         return Result.success(getOne(new QueryWrapper<FileUploadTask>().eq("id", fileUploadTask.getId())));
     }

@@ -31,6 +31,9 @@ public class CacheUtil {
     /** 分片上传任务缓存前缀（Hash 结构，一个任务一个 key） */
     private static final String CHUNK_TASK_PREFIX = "chunk:task";
 
+    /** 任务分片总数缓存后缀 */
+    private static final String CHUNK_TASK_COUNT_SUFFIX = ":cnt";
+
     /**
      * 判断分片是否已上传
      * <p>
@@ -86,13 +89,64 @@ public class CacheUtil {
     /**
      * 删除某任务的全部分片缓存
      * <p>
-     * 合并成功后调用，清理 Redis 中该任务的 Hash。
+     * 合并成功后调用，清理 Redis 中该任务的 Hash 和总数信息。
      * </p>
      *
      * @param taskId 上传任务ID
      */
     public void deleteChunkInfos(Long taskId) {
-        stringRedisTemplate.delete(CHUNK_TASK_PREFIX + ":" + taskId);
+        String key = CHUNK_TASK_PREFIX + ":" + taskId;
+        stringRedisTemplate.delete(key);
+        stringRedisTemplate.delete(key + CHUNK_TASK_COUNT_SUFFIX);
+    }
+
+    /**
+     * 存储任务分片总数到 Redis
+     * <p>
+     * initFile 时调用，供上传过程中通过 Redis 判断是否全部传完。
+     * </p>
+     *
+     * @param taskId      上传任务ID
+     * @param totalChunks 总分片数
+     */
+    public void putTaskMeta(Long taskId, Integer totalChunks) {
+        String key = CHUNK_TASK_PREFIX + ":" + taskId + CHUNK_TASK_COUNT_SUFFIX;
+        stringRedisTemplate.opsForValue().set(key, totalChunks.toString(), 1, TimeUnit.DAYS);
+    }
+
+    /**
+     * 获取任务分片总数
+     *
+     * @param taskId 上传任务ID
+     * @return 总分片数，不存在返回 null
+     */
+    public Integer getTaskChunkCount(Long taskId) {
+        String key = CHUNK_TASK_PREFIX + ":" + taskId + CHUNK_TASK_COUNT_SUFFIX;
+        String val = stringRedisTemplate.opsForValue().get(key);
+        return val == null ? null : Integer.valueOf(val);
+    }
+
+    /**
+     * 判断上传任务是否存在（Redis 中是否有该任务的 Hash）
+     *
+     * @param taskId 上传任务ID
+     * @return true 表示任务存在
+     */
+    public boolean isTaskExists(Long taskId) {
+        String key = CHUNK_TASK_PREFIX + ":" + taskId;
+        return Boolean.TRUE.equals(stringRedisTemplate.hasKey(key));
+    }
+
+    /**
+     * 获取已上传的分片数（Hash 的 field 数量）
+     *
+     * @param taskId 上传任务ID
+     * @return 已上传分片数
+     */
+    public long getUploadedChunkCount(Long taskId) {
+        String key = CHUNK_TASK_PREFIX + ":" + taskId;
+        Long count = stringRedisTemplate.opsForHash().size(key);
+        return count == null ? 0L : count;
     }
 
     /**

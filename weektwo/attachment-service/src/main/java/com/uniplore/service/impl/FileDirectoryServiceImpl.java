@@ -50,8 +50,14 @@ public class FileDirectoryServiceImpl extends ServiceImpl<FileDirectoryMapper, F
             throw new IllegalStateException("根目录不存在，请先初始化系统");
         }
 
+        // 用户个人目录放在根目录下的 User 子目录中
+        FileDirectory userParent = getUserParentDirectory();
+        if (userParent == null) {
+            throw new IllegalStateException("User父目录不存在，请先初始化系统");
+        }
+
         FileDirectory userDir = new FileDirectory();
-        userDir.setParentId(root.getId());
+        userDir.setParentId(userParent.getId());
         userDir.setName(username);
         userDir.setSort(0);
         userDir.setCreateUser(userId);
@@ -174,21 +180,13 @@ public class FileDirectoryServiceImpl extends ServiceImpl<FileDirectoryMapper, F
             throw new IllegalArgumentException("父目录不存在");
         }
 
-        // 检查同级目录是否有重名
-        FileDirectory exist = getOne(new QueryWrapper<FileDirectory>()
-                .eq("parent_id", parentId)
-                .eq("name", name)
-                .eq("status", 1)
-                .last("LIMIT 1")
-        );
-        if (exist != null) {
-            throw new IllegalArgumentException("同级目录已存在同名目录");
-        }
+        // 自动解析不重名的目录名（如果同级存在同名则追加编号）
+        String uniqueName = resolveUniqueDirName(parentId, name.trim());
 
         // 创建新目录
         FileDirectory dir = new FileDirectory();
         dir.setParentId(parentId);
-        dir.setName(name);
+        dir.setName(uniqueName);
         dir.setSort(0);
         dir.setCreateUser(userId);
         dir.setStatus(1);
@@ -269,10 +267,13 @@ public class FileDirectoryServiceImpl extends ServiceImpl<FileDirectoryMapper, F
         if (dir.getParentId() == 0) {
             throw new IllegalArgumentException("不允许删除根目录");
         }
-        // 不允许删除用户个人目录（直接隶属于根目录、且为当前用户创建）
-        FileDirectory root = getRootDirectory();
-        if (root != null && dir.getParentId().equals(root.getId())) {
-            // 该目录是根目录下的一级子目录（即用户个人目录）
+        // 不允许删除User父目录
+        FileDirectory userParent = getUserParentDirectory();
+        if (userParent != null && dir.getId().equals(userParent.getId())) {
+            throw new IllegalArgumentException("不允许删除User目录");
+        }
+        // 不允许删除用户个人目录（User目录的直接子目录）
+        if (userParent != null && dir.getParentId().equals(userParent.getId())) {
             throw new IllegalArgumentException("不允许删除个人目录");
         }
         // 校验所有权
@@ -304,6 +305,128 @@ public class FileDirectoryServiceImpl extends ServiceImpl<FileDirectoryMapper, F
         dir.setStatus(0);
         updateById(dir);
         return true;
+    }
+
+    /**
+     * 在目标目录下为文件解析一个不重名的文件名
+     * <p>
+     * 如果目标目录中已存在同名文件，则自动生成带编号的新文件名，
+     * 命名规则：原文件名 (1).扩展名、原文件名 (2).扩展名 ...
+     * </p>
+     *
+     * @param parentId         目标目录ID
+     * @param originalFileName 原始文件名
+     * @return 解析后的唯一文件名
+     */
+    @Override
+    public String resolveUniqueFileName(Long parentId, String originalFileName) {
+        if (originalFileName == null || originalFileName.isEmpty()) {
+            return originalFileName;
+        }
+
+        // 先检查原始名称是否冲突
+        long exists = fileInfoMapper.selectCount(new QueryWrapper<FileInfo>()
+                .eq("parent_id", parentId)
+                .eq("file_name", originalFileName)
+                .eq("status", 1)
+        );
+        if (exists == 0) {
+            return originalFileName;
+        }
+
+        // 拆分基本名和扩展名（扩展名取最后一个 . 之后的部分）
+        int lastDot = originalFileName.lastIndexOf('.');
+        String base;
+        String ext;
+        if (lastDot > 0) {
+            base = originalFileName.substring(0, lastDot);
+            // 包含点号，如 ".pdf"
+            ext = originalFileName.substring(lastDot);
+
+        } else {
+            base = originalFileName;
+            ext = "";
+        }
+
+        // 去掉已有的 (N) 后缀，避免嵌套编号
+        base = base.replaceAll("\\s*\\(\\d+\\)$", "");
+
+        // 递增编号直到找到不冲突的文件名
+        int counter = 1;
+        while (true) {
+            String candidate = base + " (" + counter + ")" + ext;
+            long count = fileInfoMapper.selectCount(new QueryWrapper<FileInfo>()
+                    .eq("parent_id", parentId)
+                    .eq("file_name", candidate)
+                    .eq("status", 1)
+            );
+            if (count == 0) {
+                return candidate;
+            }
+            counter++;
+        }
+    }
+
+    /**
+     * 在目标目录下为子目录解析一个不重名的目录名
+     * <p>
+     * 规则与 resolveUniqueFileName 一致，但查询的是 file_directory 表。
+     * </p>
+     *
+     * @param parentId        目标父目录ID
+     * @param originalDirName 原始目录名
+     * @return 解析后的唯一目录名
+     */
+    @Override
+    public String resolveUniqueDirName(Long parentId, String originalDirName) {
+        if (originalDirName == null || originalDirName.isEmpty()) {
+            return originalDirName;
+        }
+
+        // 先检查原始名称是否冲突
+        long exists = count(new QueryWrapper<FileDirectory>()
+                .eq("parent_id", parentId)
+                .eq("name", originalDirName)
+                .eq("status", 1)
+        );
+        if (exists == 0) {
+            return originalDirName;
+        }
+
+        // 去掉已有的 (N) 后缀，避免嵌套编号
+        String base = originalDirName.replaceAll("\\s*\\(\\d+\\)$", "");
+
+        // 递增编号直到找到不冲突的目录名
+        int counter = 1;
+        while (true) {
+            String candidate = base + " (" + counter + ")";
+            long count = count(new QueryWrapper<FileDirectory>()
+                    .eq("parent_id", parentId)
+                    .eq("name", candidate)
+                    .eq("status", 1)
+            );
+            if (count == 0) {
+                return candidate;
+            }
+            counter++;
+        }
+    }
+
+    /**
+     * 获取User父目录（位于根目录下名为"User"的子目录）
+     *
+     * @return User父目录，不存在返回null
+     */
+    private FileDirectory getUserParentDirectory() {
+        FileDirectory root = getRootDirectory();
+        if (root == null) {
+            return null;
+        }
+        return getOne(new QueryWrapper<FileDirectory>()
+                .eq("parent_id", root.getId())
+                .eq("name", "User")
+                .eq("status", 1)
+                .last("LIMIT 1"));
     }
 
 }

@@ -49,6 +49,11 @@ public class InitRunner implements CommandLineRunner {
     private static final String ROOT_DIRECTORY_NAME = "admin";
 
     /**
+     * User父目录名称
+     */
+    private static final String USER_PARENT_DIRECTORY_NAME = "User";
+
+    /**
      * 初始化系统
      * @param args 命令行参数（未使用）
      */
@@ -79,7 +84,27 @@ public class InitRunner implements CommandLineRunner {
             rootDir.setCreateUser(adminId);
             rootDir.setStatus(1);
             fileDirectoryService.save(rootDir);
+            root = rootDir;
             log.info("初始化：创建根目录");
+        }
+
+        // 3. 检查User父目录是否存在（位于根目录下，存放所有用户个人目录）
+        FileDirectory userParentDir = fileDirectoryService.getOne(
+                new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<FileDirectory>()
+                        .eq("parent_id", root.getId())
+                        .eq("name", USER_PARENT_DIRECTORY_NAME)
+                        .eq("status", 1)
+                        .last("LIMIT 1")
+        );
+        if (userParentDir == null) {
+            FileDirectory userDir = new FileDirectory();
+            userDir.setParentId(root.getId());
+            userDir.setName(USER_PARENT_DIRECTORY_NAME);
+            userDir.setSort(0);
+            userDir.setCreateUser(adminId);
+            userDir.setStatus(1);
+            fileDirectoryService.save(userDir);
+            log.info("初始化：创建User父目录");
         }
 
         log.info("系统初始化完成");

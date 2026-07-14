@@ -7,7 +7,6 @@ import com.uniplore.service.FileChunkService;
 import com.uniplore.service.FileDirectoryService;
 import com.uniplore.service.FileUploadTaskService;
 import com.uniplore.mapper.FileInfoMapper;
-import com.uniplore.util.FileHashUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.FileSystemResource;
@@ -105,7 +104,7 @@ public class FileController {
         }
 
         // 将taskId转为Long，防止数值溢出
-        Long parsedTaskId;
+        long parsedTaskId;
         try {
             parsedTaskId = Long.parseLong(taskId);
         } catch (NumberFormatException e) {
@@ -186,7 +185,7 @@ public class FileController {
      * @return 文件下载响应
      */
     @GetMapping("/download/{fileId}")
-    public ResponseEntity<Resource> downloadFile(@PathVariable Long fileId) throws IOException {
+    public ResponseEntity<Resource> downloadFile(@PathVariable Long fileId) {
         // 检查用户是否登录
         if (!StpUtil.isLogin()) {
             // 未登录用户尝试下载文件，返回错误
@@ -307,6 +306,10 @@ public class FileController {
         if (targetDir == null) {
             return Result.error(400, "目标目录不存在", null);
         }
+        // 自动重命名：如果目标目录已存在同名文件，追加编号避免冲突
+        String uniqueName = fileDirectoryService.resolveUniqueFileName(
+                targetDirId, fileInfo.getFileName());
+        fileInfo.setFileName(uniqueName);
         // 更新文件所在目录
         fileInfo.setParentId(targetDirId);
         fileInfoMapper.updateById(fileInfo);

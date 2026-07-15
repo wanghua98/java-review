@@ -117,3 +117,17 @@ export function deleteDir(dirId) {
 export function getDownloadUrl(fileId) {
   return '/api/file/download/' + fileId
 }
+
+/**
+ * 获取 kkFileView 在线预览 URL
+ * @param {number} fileId - 文件ID
+ * @param {string} suffix  - 文件后缀（如 'jpg', 'pdf'）
+ * @returns {string}        - 完整的 kkFileView 预览地址
+ */
+export function getPreviewUrl(fileId, suffix) {
+  // kkFileView 预览链接
+  const fileUrl = `http://localhost:8001/api/file/inline/${fileId}.${suffix}`
+  // 标准 base64 编码并 URL 编码
+  const base64 = btoa(fileUrl)
+  return `http://localhost:8012/onlinePreview?url=${encodeURIComponent(base64)}`
+}

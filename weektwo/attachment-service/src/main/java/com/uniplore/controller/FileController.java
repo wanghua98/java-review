@@ -76,6 +76,11 @@ public class FileController {
         if (fileUploadTask.getFileName() == null) {
             return Result.error(400, "参数有误", null);
         }
+        // 判断是否登陆
+        if (!StpUtil.isLogin()) {
+            return Result.error(401, "未登录", null);
+        }
+
         return fileUploadTaskService.initFile(fileUploadTask);
     }
 
@@ -186,11 +191,7 @@ public class FileController {
      */
     @GetMapping("/download/{fileId}")
     public ResponseEntity<Resource> downloadFile(@PathVariable Long fileId) {
-        // 检查用户是否登录
-        if (!StpUtil.isLogin()) {
-            // 未登录用户尝试下载文件，返回错误
-            return ResponseEntity.badRequest().build();
-        }
+
 
         // 查询文件信息
         FileInfo fileInfo = fileInfoMapper.selectById(fileId);
@@ -228,6 +229,55 @@ public class FileController {
                 .body(resource);
     }
 
+    /**
+     * 预览文件接口
+     * @param fileId 文件对应id
+     * @param suffix 文件对应后缀
+     * @return 对应文件
+     */
+    @GetMapping("/inline/{fileId}.{suffix}")
+    public ResponseEntity<Resource> inlineFile(@PathVariable Long fileId, @PathVariable(required = false) String suffix) {
+        // 检查用户是否登录
+        if (!StpUtil.isLogin()) {
+            // 未登录用户尝试预览文件，返回错误
+            return ResponseEntity.badRequest().build();
+        }
+
+        // 查询文件信息
+        FileInfo fileInfo = fileInfoMapper.selectById(fileId);
+        if (fileInfo == null || fileInfo.getStatus() == null || fileInfo.getStatus() < 1 || suffix == null || suffix.isEmpty()) {
+            return ResponseEntity.badRequest().build();
+        }
+
+        // 拼接完整存储路径
+        String storagePath = fileInfo.getStoragePath();
+        String fullPath = uploadPath + File.separator + storagePath;
+        File file = new File(fullPath);
+
+        // 检查文件是否存在
+        if (!file.exists() || !file.isFile()) {
+            return ResponseEntity.badRequest().build();
+        }
+
+        // 创建文件资源
+        FileSystemResource resource = new FileSystemResource(file);
+
+        // 设置响应头
+        HttpHeaders headers = new HttpHeaders();
+        // 文件名URL编码，支持中文文件名
+        String encodedFileName = URLEncoder.encode(fileInfo.getFileName(), StandardCharsets.UTF_8)
+                .replace("+", "%20");
+        headers.add(HttpHeaders.CONTENT_DISPOSITION,
+                "inline; filename*=UTF-8''" + encodedFileName);
+        // 根据文件后缀设置 Content-Type
+        MediaType mediaType = getMediaType(fileInfo.getFileSuffix());
+
+        return ResponseEntity.ok()
+                .headers(headers)
+                .contentLength(file.length())
+                .contentType(mediaType)
+                .body(resource);
+    }
 
     /**
      * 在指定目录下新建子目录

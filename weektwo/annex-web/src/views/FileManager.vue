@@ -12,16 +12,22 @@ import {
   getUserDirList, getDirList, getDownloadUrl, createDir,
   initUpload, uploadChunk, moveFile,
   deleteFile, deleteDir,
+  getPreviewUrl,
 } from '@/api/file.js'
 
 const router = useRouter()
 
 // 当前目录信息
 const currentDir = ref(null)
+// 当前目录下的子目录列表
 const subDirs = ref([])
+// 当前目录下的文件列表
 const files = ref([])
-const dirHistory = ref([])       // 面包屑历史
+// 当前目录导航历史
+const dirHistory = ref([])
+// 加载状态
 const loading = ref(true)
+// 提示信息
 const message = ref('')
 
 // 新建文件夹
@@ -385,6 +391,60 @@ function formatFileSize(bytes) {
   return (bytes / 1024 / 1024 / 1024).toFixed(2) + ' GB'
 }
 
+/**
+ * kkFileView 支持预览的所有文件格式
+ *
+ */
+const PREVIEWABLE_TYPES = new Set([
+  // ── Office / WPS / LibreOffice ──
+  'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'csv', 'tsv',
+  'wps', 'dps', 'et', 'ett', 'wpt', 'pdf',
+  'odt', 'ods', 'odp', 'ott', 'fodt', 'fods',
+  // ── CAD & 3D ──
+  'dwg', 'dxf', 'dwf', 'dwt', 'plt', 'cf2',
+  'obj', '3ds', 'stl', 'gltf', 'glb', 'fbx', 'dae',
+  'ifc', 'step', 'iges', 'fcstd', 'bim', 'brep',
+  // ── 图片 ──
+  'jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'heic',
+  'tif', 'tiff', 'tga', 'svg', 'wmf', 'emf',
+  // ── 压缩包与文本 ──
+  'zip', 'rar', 'jar', 'tar', 'gzip', 'gz', '7z',
+  'txt', 'md', 'xml', 'java', 'js', 'css', 'py', 'php',
+  // ── 音视频与邮件 ──
+  'mp3', 'wav', 'mp4', 'flv', 'avi', 'mkv', 'webm',
+  'eml', 'msg',
+  // ── 其他 ──
+  'epub', 'ofd', 'xmind', 'bpmn', 'drawio', 'dcm',
+  // 再补充几个常见的
+  'html', 'htm', 'json', 'c', 'cpp', 'h', 'go', 'yaml', 'yml',
+])
+
+/**
+ * 从文件名中提取后缀
+ */
+function getFileSuffix(fileName) {
+  if (!fileName) return ''
+  const dotIndex = fileName.lastIndexOf('.')
+  return dotIndex > 0 ? fileName.substring(dotIndex + 1).toLowerCase() : ''
+}
+
+/**
+ * 判断文件是否支持在线预览
+ */
+function isPreviewable(file) {
+  return PREVIEWABLE_TYPES.has(getFileSuffix(file.fileName))
+}
+
+/**
+ * 打开 kkFileView 在线预览
+ */
+function previewFile(file) {
+  const suffix = getFileSuffix(file.fileName)
+  if (!suffix) return
+  const url = getPreviewUrl(file.id, suffix)
+  window.open(url, '_blank')
+}
+
 onMounted(() => {
   loadDir(null)
 })
@@ -448,6 +508,7 @@ onMounted(() => {
         <span class="name">{{ file.fileName }}</span>
         <span class="size">{{ formatFileSize(file.fileSize) }}</span>
         <a class="action-link" :href="getDownloadUrl(file.id)" target="_blank">下载</a>
+        <span v-if="isPreviewable(file)" class="action-link preview" @click="previewFile(file)">预览</span>
         <span class="action-link move" @click="showMovePicker(file)">移动</span>
         <span class="action-link del" @click="confirmDeleteFile(file)">删除</span>
       </div>
@@ -609,6 +670,10 @@ onMounted(() => {
 
 .action-link:hover {
   text-decoration: underline;
+}
+
+.action-link.preview {
+  color: #e6a23c;
 }
 
 .action-link.move {

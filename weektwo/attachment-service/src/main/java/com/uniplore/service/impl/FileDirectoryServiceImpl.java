@@ -8,6 +8,7 @@ import com.uniplore.pojo.DirectoryVO;
 import com.uniplore.pojo.FileDirectory;
 import com.uniplore.pojo.FileInfo;
 import com.uniplore.service.FileDirectoryService;
+import com.uniplore.util.ValidateUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -174,6 +175,9 @@ public class FileDirectoryServiceImpl extends ServiceImpl<FileDirectoryMapper, F
      */
     @Override
     public FileDirectory createSubDirectory(Long parentId, String name, Long userId) {
+        // 校验目录名称格式
+        ValidateUtil.validateDirectoryName(name);
+
         // 检查父目录是否存在
         FileDirectory parent = getById(parentId);
         if (parent == null) {
@@ -410,6 +414,195 @@ public class FileDirectoryServiceImpl extends ServiceImpl<FileDirectoryMapper, F
             }
             counter++;
         }
+    }
+
+    /**
+     * 重命名文件
+     * <p>
+     * 验证文件存在及所有权，自动解决同名冲突后更新文件名。
+     * </p>
+     *
+     * @param fileId  文件ID
+     * @param newName 新文件名
+     * @param userId  当前用户ID
+     * @return true 重命名成功
+     * @throws IllegalArgumentException 文件不存在、无权操作或名称无效
+     */
+    @Override
+    public boolean renameFile(Long fileId, String newName, Long userId) {
+        // 查询文件是否存在
+        FileInfo fileInfo = fileInfoMapper.selectById(fileId);
+        if (fileInfo == null) {
+            throw new IllegalArgumentException("文件不存在");
+        }
+        // 校验所有权
+        if (!fileInfo.getCreateUser().equals(userId)) {
+            throw new IllegalArgumentException("无权重命名此文件");
+        }
+        // 校验文件名格式（含非法字符和长度）
+        ValidateUtil.validateFileName(newName);
+        newName = newName.trim();
+
+        // 如果名称没有变化则跳过
+        if (newName.equals(fileInfo.getFileName())) {
+            return true;
+        }
+
+        // 自动解决同名冲突（同一目录下不能有同名文件）
+        String uniqueName = resolveUniqueFileName(fileInfo.getParentId(), newName);
+
+        // 更新文件名
+        fileInfo.setFileName(uniqueName);
+
+        // 同步更新文件后缀（允许修改扩展名）
+        int lastDot = uniqueName.lastIndexOf('.');
+        String newSuffix = lastDot > 0 ? uniqueName.substring(lastDot + 1) : "";
+        fileInfo.setFileSuffix(newSuffix);
+
+        fileInfoMapper.updateById(fileInfo);
+        return true;
+    }
+
+    /**
+     * 重命名目录
+     * <p>
+     * 验证目录存在及所有权，不允许重命名 id=2 的目录，
+     * 自动解决同名冲突后更新目录名。
+     * </p>
+     *
+     * @param dirId   目录ID
+     * @param newName 新目录名
+     * @param userId  当前用户ID
+     * @return true 重命名成功
+     * @throws IllegalArgumentException 目录不存在、无权操作、受保护或名称无效
+     */
+    @Override
+    public boolean renameDirectory(Long dirId, String newName, Long userId) {
+        // 查询目录是否存在
+        FileDirectory dir = getById(dirId);
+        if (dir == null) {
+            throw new IllegalArgumentException("目录不存在");
+        }
+        // id=2 的 User 父目录不能重命名
+        if (dir.getId() == 2) {
+            throw new IllegalArgumentException("不允许重命名此目录");
+        }
+        // 校验所有权
+        if (!dir.getCreateUser().equals(userId)) {
+            throw new IllegalArgumentException("无权重命名此目录");
+        }
+        // 校验目录名称格式
+        ValidateUtil.validateDirectoryName(newName);
+        newName = newName.trim();
+
+        // 如果名称没有变化则跳过
+        if (newName.equals(dir.getName())) {
+            return true;
+        }
+
+        // 自动解决同名冲突（同一父目录下不能有同名目录）
+        String uniqueName = resolveUniqueDirName(dir.getParentId(), newName);
+
+        // 更新目录名
+        dir.setName(uniqueName);
+        updateById(dir);
+        return true;
+    }
+
+    /**
+     * 移动目录到其他目录
+     * <p>
+     * 验证目录存在及所有权，不允许移动自身或移动到自己的子树中，
+     * 不允许移动根目录和 id=2 的目录。
+     * 自动解决同名冲突后更新 parent_id。
+     * </p>
+     *
+     * @param dirId       目录ID
+     * @param targetDirId 目标父目录ID
+     * @param userId      当前用户ID
+     * @return true 移动成功
+     * @throws IllegalArgumentException 目录不存在、无权操作、移动路径非法或目标无效
+     */
+    @Override
+    public boolean moveDirectory(Long dirId, Long targetDirId, Long userId) {
+        // 查询源目录是否存在
+        FileDirectory dir = getById(dirId);
+        if (dir == null) {
+            throw new IllegalArgumentException("目录不存在");
+        }
+        // 不允许移动根目录
+        if (dir.getParentId() == 0) {
+            throw new IllegalArgumentException("不允许移动根目录");
+        }
+        // id=2 的 User 父目录不能移动
+        if (dir.getId() == 2) {
+            throw new IllegalArgumentException("不允许移动此目录");
+        }
+        // 校验所有权
+        if (!dir.getCreateUser().equals(userId)) {
+            throw new IllegalArgumentException("无权限移动此目录");
+        }
+
+        // 查询目标目录是否存在
+        FileDirectory targetDir = getById(targetDirId);
+        if (targetDir == null) {
+            throw new IllegalArgumentException("目标目录不存在");
+        }
+
+        // 不能移动到自己下面
+        if (dirId.equals(targetDirId)) {
+            throw new IllegalArgumentException("不能将目录移动到自己内部");
+        }
+
+        // 不能移动到自己原来的位置
+        if (dir.getParentId().equals(targetDirId)) {
+            // 已在目标目录中，视为成功
+            return true;
+        }
+
+        // 检查 targetDir 是否是 dir 的子目录（防止循环）
+        if (isDescendantOf(targetDirId, dirId)) {
+            throw new IllegalArgumentException("不能将目录移动到自己的子目录中");
+        }
+
+        // 自动解决同名冲突（目标目录下不能有同名目录）
+        String uniqueName = resolveUniqueDirName(targetDirId, dir.getName());
+
+        // 更新目录的父节点和名称（如果有冲突自动重命名）
+        dir.setParentId(targetDirId);
+        dir.setName(uniqueName);
+        updateById(dir);
+        return true;
+    }
+
+    /**
+     * 判断 candidateId 是否是 ancestorId 的后代目录
+     * <p>
+     * 从 candidateId 开始沿 parentId 链向上查找，如果最终追溯到 ancestorId 则说明是后代。
+     * </p>
+     *
+     * @param candidateId 待检查的目录ID
+     * @param ancestorId  祖先目录ID
+     * @return true 如果 candidateId 是 ancestorId 的后代
+     */
+    private boolean isDescendantOf(Long candidateId, Long ancestorId) {
+        // 最多向上追溯 100 层，防止死循环（如果数据有环）
+        int maxDepth = 100;
+        Long currentId = candidateId;
+        for (int i = 0; i < maxDepth; i++) {
+            if (currentId == null || currentId == 0) {
+                return false;
+            }
+            if (currentId.equals(ancestorId)) {
+                return true;
+            }
+            FileDirectory current = getById(currentId);
+            if (current == null) {
+                return false;
+            }
+            currentId = current.getParentId();
+        }
+        return false;
     }
 
     /**

@@ -63,7 +63,76 @@ public enum ResultMessage {
     /**
      * 参数有误
      */
-    INVALID_PARAMETERS("参数有误");
+    INVALID_PARAMETERS("参数有误"),
+
+    // ==================== 用户校验 ====================
+
+    /**
+     * 用户名为空
+     */
+    USERNAME_EMPTY("用户名不能为空"),
+
+    /**
+     * 用户名长度超过限制
+     */
+    USERNAME_TOO_LONG("用户名长度不能超过50个字符"),
+
+    /**
+     * 用户名格式错误（必须以字母开头）
+     */
+    USERNAME_MUST_START_WITH_LETTER("用户名必须以字母开头"),
+
+    /**
+     * 用户名包含非法字符
+     */
+    USERNAME_INVALID_CHARS("用户名只能包含字母和数字"),
+
+    /**
+     * 密码为空
+     */
+    PASSWORD_EMPTY("密码不能为空"),
+
+    /**
+     * 密码太短
+     */
+    PASSWORD_TOO_SHORT("密码长度不能少于2位"),
+
+    /**
+     * 密码太长
+     */
+    PASSWORD_TOO_LONG("密码长度不能超过100位"),
+
+    // ==================== 目录/文件名校验 ====================
+
+    /**
+     * 目录名为空
+     */
+    DIR_NAME_EMPTY("目录名称不能为空"),
+
+    /**
+     * 目录名太长
+     */
+    DIR_NAME_TOO_LONG("目录名称长度不能超过100个字符"),
+
+    /**
+     * 目录名包含非法字符
+     */
+    DIR_NAME_INVALID_CHARS("目录名称包含非法字符: "),
+
+    /**
+     * 文件名为空
+     */
+    FILE_NAME_EMPTY("文件名不能为空"),
+
+    /**
+     * 文件名太长
+     */
+    FILE_NAME_TOO_LONG("文件名长度不能超过255个字符"),
+
+    /**
+     * 文件名包含非法字符
+     */
+    FILE_NAME_INVALID_CHARS("文件名包含非法字符: ");
 
     /**
      * 消息文本

@@ -365,6 +365,32 @@ public class FileController {
 
 
     /**
+     * 移动目录到其他目录
+     * <p>
+     * 将指定目录移动到目标目录下（只更新数据库中的 parent_id）。
+     * 不能移动到自身或自己的子树中。
+     * </p>
+     *
+     * @param dirId       目录ID
+     * @param targetDirId 目标目录ID
+     * @return 移动结果
+     */
+    @PostMapping("/dir/move/{dirId}")
+    public Result<String> moveDir(@PathVariable Long dirId,
+                                   @RequestParam("targetDirId") Long targetDirId) {
+        if (!StpUtil.isLogin()) {
+            return Result.error(401, ResultMessage.USER_NOT_LOGGED_IN.getMessage(), null);
+        }
+        try {
+            fileDirectoryService.moveDirectory(dirId, targetDirId, StpUtil.getLoginIdAsLong());
+            return Result.success("移动成功");
+        } catch (IllegalArgumentException e) {
+            return Result.error(400, e.getMessage(), null);
+        }
+    }
+
+
+    /**
      * 删除文件
      * <p>
      * 将指定文件标记为已删除状态（软删除，status=0），
@@ -414,6 +440,57 @@ public class FileController {
         }
     }
 
+
+    /**
+     * 重命名文件
+     * <p>
+     * 将指定文件重命名为新名称。名称冲突时自动追加编号后缀。
+     * 只有文件的上传者才能重命名。
+     * </p>
+     *
+     * @param fileId  文件ID
+     * @param newName 新文件名（含扩展名）
+     * @return 重命名结果
+     */
+    @PostMapping("/rename/{fileId}")
+    public Result<String> renameFile(@PathVariable Long fileId,
+                                     @RequestParam("newName") String newName) {
+        if (!StpUtil.isLogin()) {
+            return Result.error(401, ResultMessage.USER_NOT_LOGGED_IN.getMessage(), null);
+        }
+        try {
+            fileDirectoryService.renameFile(fileId, newName, StpUtil.getLoginIdAsLong());
+            return Result.success("重命名成功");
+        } catch (IllegalArgumentException e) {
+            return Result.error(400, e.getMessage(), null);
+        }
+    }
+
+    /**
+     * 重命名目录
+     * <p>
+     * 将指定目录重命名为新名称。名称冲突时自动追加编号后缀。
+     * 不允许重命名 id=2 的目录。
+     * 只有目录的创建者才能重命名。
+     * </p>
+     *
+     * @param dirId   目录ID
+     * @param newName 新目录名
+     * @return 重命名结果
+     */
+    @PostMapping("/dir/rename/{dirId}")
+    public Result<String> renameDir(@PathVariable Long dirId,
+                                    @RequestParam("newName") String newName) {
+        if (!StpUtil.isLogin()) {
+            return Result.error(401, ResultMessage.USER_NOT_LOGGED_IN.getMessage(), null);
+        }
+        try {
+            fileDirectoryService.renameDirectory(dirId, newName, StpUtil.getLoginIdAsLong());
+            return Result.success("重命名成功");
+        } catch (IllegalArgumentException e) {
+            return Result.error(400, e.getMessage(), null);
+        }
+    }
 
     /**
      * 根据文件后缀获取对应的 MediaType

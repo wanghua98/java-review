@@ -11,6 +11,7 @@ import com.uniplore.result.Result;
 import com.uniplore.service.FileDirectoryService;
 import com.uniplore.service.UserService;
 import com.uniplore.util.PasswordUtil;
+import com.uniplore.util.ValidateUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -68,6 +69,14 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     @Transactional(rollbackFor = Exception.class)
     public Result<String> register(UserDTO userDTO) {
 
+        // 校验用户名格式和密码长度
+        try {
+            ValidateUtil.validateUsername(userDTO.getUsername());
+            ValidateUtil.validatePassword(userDTO.getPassword());
+        } catch (IllegalArgumentException e) {
+            return Result.error(400, e.getMessage(), null);
+        }
+
         // 比对前端提交的账号名称
         User user = query().select("id").eq("username", userDTO.getUsername()).one();
         if (user != null) {
@@ -105,6 +114,24 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         // 设置用户ID
         Long userId = StpUtil.getLoginIdAsLong();
         userDTO.setId(userId);
+
+        // 校验用户名格式（仅在修改时）
+        if (userDTO.getUsername() != null && !userDTO.getUsername().isEmpty()) {
+            try {
+                ValidateUtil.validateUsername(userDTO.getUsername());
+            } catch (IllegalArgumentException e) {
+                return Result.error(400, e.getMessage(), null);
+            }
+        }
+
+        // 校验密码长度（仅在修改时）
+        if (userDTO.getPassword() != null && !userDTO.getPassword().isEmpty()) {
+            try {
+                ValidateUtil.validatePassword(userDTO.getPassword());
+            } catch (IllegalArgumentException e) {
+                return Result.error(400, e.getMessage(), null);
+            }
+        }
 
         // 获取当前用户信息，判断用户名是否变更
         String oldUsername = null;

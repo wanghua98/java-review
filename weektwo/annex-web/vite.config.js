@@ -17,7 +17,7 @@ export default defineConfig({
   },
   server: {
     host: true,         // 监听所有网卡地址（支持局域网访问）
-    port: 5173,         // 默认端口
+    port: 80,         // 默认端口
     // API 代理：将 /api 请求转发到后端
     proxy: {
       '/api': {

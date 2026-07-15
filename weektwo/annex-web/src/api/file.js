@@ -103,6 +103,11 @@ export function moveFile(fileId, targetDirId) {
   return postForm('/api/file/move', { fileId, targetDirId })
 }
 
+/** 移动目录到其他目录 */
+export function moveDir(dirId, targetDirId) {
+  return postForm('/api/file/dir/move/' + dirId, { targetDirId })
+}
+
 /** 删除文件（软删除） */
 export function deleteFile(fileId) {
   return postForm('/api/file/delete/' + fileId, {})
@@ -111,6 +116,16 @@ export function deleteFile(fileId) {
 /** 删除目录（递归删除其下所有内容） */
 export function deleteDir(dirId) {
   return postForm('/api/file/dir/delete/' + dirId, {})
+}
+
+/** 重命名文件 */
+export function renameFile(fileId, newName) {
+  return postForm('/api/file/rename/' + fileId, { newName })
+}
+
+/** 重命名目录 */
+export function renameDir(dirId, newName) {
+  return postForm('/api/file/dir/rename/' + dirId, { newName })
 }
 
 /** 获取文件下载链接 */

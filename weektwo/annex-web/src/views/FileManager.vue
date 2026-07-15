@@ -5,13 +5,14 @@
   - 新建文件夹、上传文件（分片上传）、移动文件、下载文件
 -->
 <script setup>
-import {ref, onMounted} from 'vue'
+import {ref, nextTick, onMounted} from 'vue'
 import {useRouter} from 'vue-router'
 import {createSHA256} from 'hash-wasm';
 import {
   getUserDirList, getDirList, getDownloadUrl, createDir,
-  initUpload, uploadChunk, moveFile,
+  initUpload, uploadChunk, moveFile, moveDir,
   deleteFile, deleteDir,
+  renameFile, renameDir,
   getPreviewUrl,
 } from '@/api/file.js'
 
@@ -57,14 +58,74 @@ const currentFile = ref(null)
 /** 缓存已计算的 SHA-256（暂停后续传时复用，避免重复计算） */
 const cachedHashHex = ref('')
 
-// 移动文件（逐层目录选择）
-const moveFileId = ref(null)     // 正在移动的文件ID
-const moveDir = ref(null)        // 当前浏览的目标目录
+// 移动文件/文件夹
+const moveTarget = ref(null)     // { type:'file'|'dir', id }
+const moveTargetName = ref('')   // 正在移动的项的名称（显示用）
+const moveCurrentDir = ref(null)   // 当前浏览的目标目录
 const moveSubDirs = ref([])      // 当前目录下的子目录列表
 const moveDirHistory = ref([])   // 目录导航历史
 
 // 删除确认
 const deleteTarget = ref(null)   // { type:'file'|'dir', item }
+
+// 重命名（inline edit）
+const renameTarget = ref(null)  // { type:'file'|'dir', item, name }
+
+/** 开始重命名：点击文件名/目录名时触发 */
+function startRename(type, item, event) {
+  event.stopPropagation()
+  renameTarget.value = {
+    type,
+    item,
+    name: type === 'dir' ? item.name : item.fileName,
+  }
+  // 等 DOM 渲染完成后自动聚焦输入框
+  nextTick(() => {
+    const input = document.querySelector('.rename-input')
+    if (input) input.focus()
+  })
+}
+
+/** 确认重命名 */
+async function confirmRename() {
+  const target = renameTarget.value
+  if (!target) return
+  const newName = target.name ? target.name.trim() : ''
+  if (!newName) {
+    cancelRename()
+    return
+  }
+  // 名称没有变化则取消
+  const oldName = target.type === 'dir' ? target.item.name : target.item.fileName
+  if (newName === oldName) {
+    cancelRename()
+    return
+  }
+  try {
+    let res
+    if (target.type === 'dir') {
+      res = await renameDir(target.item.id, newName)
+    } else {
+      res = await renameFile(target.item.id, newName)
+    }
+    if (res.code === 200) {
+      renameTarget.value = null
+      message.value = ''
+      loadDir(currentDir.value?.id)
+    } else {
+      message.value = '重命名失败: ' + (res.message || '未知错误')
+      renameTarget.value = null
+    }
+  } catch (e) {
+    message.value = '重命名失败: ' + e.message
+    renameTarget.value = null
+  }
+}
+
+/** 取消重命名 */
+function cancelRename() {
+  renameTarget.value = null
+}
 
 /**
  * 加载指定目录的内容
@@ -275,27 +336,30 @@ async function computeSha256Chunked(file, chunkSize = 8 * 1024 * 1024) {
 /**
  * 打开移动选择器
  * 从用户个人目录开始，可逐层点击进入子目录选择目标位置
+ * @param {Object} item - 文件或目录对象
+ * @param {string} type - 'file' 或 'dir'
  */
-async function showMovePicker(file) {
-  moveFileId.value = file.id
+async function showMovePicker(item, type) {
+  moveTarget.value = { type, id: item.id }
+  moveTargetName.value = type === 'dir' ? item.name : item.fileName
   moveDirHistory.value = []
   // 加载用户个人目录作为起始目录
   const res = await getUserDirList()
   if (res.code === 200 && res.data) {
-    moveDir.value = res.data.currentDir
+    moveCurrentDir.value = res.data.currentDir
     moveSubDirs.value = res.data.subDirs || []
   } else {
-    moveDir.value = null
+    moveCurrentDir.value = null
     moveSubDirs.value = []
   }
 }
 
 /** 进入子目录（移动弹窗内） */
 async function enterMoveDir(dir) {
-  if (moveDir.value) moveDirHistory.value.push(moveDir.value)
+  if (moveCurrentDir.value) moveDirHistory.value.push(moveCurrentDir.value)
   const res = await getDirList(dir.id)
   if (res.code === 200 && res.data) {
-    moveDir.value = res.data.currentDir
+    moveCurrentDir.value = res.data.currentDir
     moveSubDirs.value = res.data.subDirs || []
   }
 }
@@ -304,7 +368,7 @@ async function enterMoveDir(dir) {
 async function goBackMoveDir() {
   if (moveDirHistory.value.length === 0) return
   const prev = moveDirHistory.value.pop()
-  moveDir.value = prev
+  moveCurrentDir.value = prev
   // 重新加载上级目录的子目录列表
   const res = await getDirList(prev.id)
   if (res.code === 200 && res.data) {
@@ -313,14 +377,21 @@ async function goBackMoveDir() {
 }
 
 /**
- * 确认移动文件
+ * 确认移动文件/文件夹
  */
 async function handleMove() {
-  if (!moveFileId.value || !moveDir.value) return
-  const res = await moveFile(moveFileId.value, moveDir.value.id)
+  if (!moveTarget.value || !moveCurrentDir.value) return
+  const target = moveTarget.value
+  let res
+  if (target.type === 'dir') {
+    res = await moveDir(target.id, moveCurrentDir.value.id)
+  } else {
+    res = await moveFile(target.id, moveCurrentDir.value.id)
+  }
   if (res.code === 200) {
-    moveFileId.value = null
-    moveDir.value = null
+    moveTarget.value = null
+    moveTargetName.value = ''
+    moveCurrentDir.value = null
     moveSubDirs.value = []
     moveDirHistory.value = []
     message.value = ''
@@ -331,8 +402,9 @@ async function handleMove() {
 }
 
 function cancelMove() {
-  moveFileId.value = null
-  moveDir.value = null
+  moveTarget.value = null
+  moveTargetName.value = ''
+  moveCurrentDir.value = null
   moveSubDirs.value = []
   moveDirHistory.value = []
 }
@@ -374,6 +446,11 @@ async function handleDelete() {
 
 function cancelDelete() {
   deleteTarget.value = null
+}
+
+/** 判断指定项是否正在重命名中 */
+function isRenaming(type, id) {
+  return renameTarget.value?.type === type && renameTarget.value?.item.id === id
 }
 
 /**
@@ -499,41 +576,65 @@ onMounted(() => {
 
       <div v-for="dir in subDirs" :key="dir.id" class="item dir" @click="enterDir(dir)">
         <span class="icon">📁</span>
-        <span class="name">{{ dir.name }}</span>
+        <span v-if="isRenaming('dir', dir.id)" class="name" @click.stop>
+          <input class="rename-input" v-model="renameTarget.name"
+                 @keyup.enter="confirmRename" @keyup.escape="cancelRename"
+                 @blur="confirmRename" @click.stop/>
+        </span>
+        <span v-else class="name renameable" :class="{ 'not-allowed': dir.id === 2 }"
+              @click.stop="dir.id === 2 || startRename('dir', dir, $event)">
+          {{ dir.name }}
+        </span>
+        <span class="action-link move" @click.stop="showMovePicker(dir, 'dir')">移动</span>
         <span class="action-link del" @click.stop="confirmDeleteDir(dir)">删除</span>
       </div>
 
       <div v-for="file in files" :key="file.id" class="item file">
         <span class="icon">📄</span>
-        <span class="name">{{ file.fileName }}</span>
+        <span v-if="isRenaming('file', file.id)" class="name" @click.stop>
+          <input class="rename-input" v-model="renameTarget.name"
+                 @keyup.enter="confirmRename" @keyup.escape="cancelRename"
+                 @blur="confirmRename" @click.stop/>
+        </span>
+        <span v-else class="name renameable"
+              @click.stop="startRename('file', file, $event)">
+          {{ file.fileName }}
+        </span>
         <span class="size">{{ formatFileSize(file.fileSize) }}</span>
         <a class="action-link" :href="getDownloadUrl(file.id)" target="_blank">下载</a>
         <span v-if="isPreviewable(file)" class="action-link preview" @click="previewFile(file)">预览</span>
-        <span class="action-link move" @click="showMovePicker(file)">移动</span>
+        <span class="action-link move" @click="showMovePicker(file, 'file')">移动</span>
         <span class="action-link del" @click="confirmDeleteFile(file)">删除</span>
       </div>
     </div>
 
     <!-- 移动弹窗（逐层目录导航） -->
-    <div class="move-modal" v-if="moveFileId">
+    <div class="move-modal" v-if="moveTarget">
       <div class="move-box">
         <p>
           <strong>
             <span v-if="moveDirHistory.length > 0" class="link" @click="goBackMoveDir">← 返回上级</span>
             <span v-if="moveDirHistory.length > 0"> / </span>
-            {{ moveDir?.name || '加载中...' }}
+            {{ moveCurrentDir?.name || '加载中...' }}
           </strong>
         </p>
+        <p style="font-size:13px; color:#666; margin-bottom:10px;">
+          正在移动「{{ moveTargetName }}」
+        </p>
         <div class="move-dirs">
-          <div v-for="dir in moveSubDirs" :key="dir.id"
-               class="move-dir"
-               @click="enterMoveDir(dir)">
-            📁 {{ dir.name }}
-          </div>
+          <template v-for="dir in moveSubDirs" :key="dir.id">
+            <div v-if="moveTarget.type === 'dir' && dir.id === moveTarget.id" class="move-dir disabled"
+                 title="不能移动到自身">
+              📁 {{ dir.name }}
+            </div>
+            <div v-else class="move-dir" @click="enterMoveDir(dir)">
+              📁 {{ dir.name }}
+            </div>
+          </template>
           <div v-if="moveSubDirs.length === 0" class="move-dir disabled">此目录下没有子目录</div>
         </div>
         <div class="move-actions">
-          <button class="btn" @click="handleMove" :disabled="!moveDir">移动到此处</button>
+          <button class="btn" @click="handleMove" :disabled="!moveCurrentDir">移动到此处</button>
           <button class="btn cancel" @click="cancelMove">取消</button>
         </div>
       </div>
@@ -651,6 +752,36 @@ onMounted(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.renameable {
+  cursor: text;
+  padding: 2px 4px;
+  border-radius: 3px;
+  margin: -2px -4px;
+  transition: background 0.15s;
+}
+
+.renameable:hover {
+  background: #e8f4ff;
+}
+
+.renameable.not-allowed {
+  cursor: default;
+}
+
+.renameable.not-allowed:hover {
+  background: transparent;
+}
+
+.rename-input {
+  width: 100%;
+  padding: 2px 6px;
+  font-size: 14px;
+  border: 1px solid #409eff;
+  border-radius: 3px;
+  outline: none;
+  box-sizing: border-box;
 }
 
 .size {

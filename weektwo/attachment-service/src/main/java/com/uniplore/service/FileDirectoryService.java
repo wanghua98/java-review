@@ -145,4 +145,51 @@ public interface FileDirectoryService extends IService<FileDirectory> {
      * @return 解析后的唯一目录名（如果原始名称不冲突则返回原名称）
      */
     String resolveUniqueDirName(Long parentId, String originalDirName);
+
+    /**
+     * 重命名文件
+     * <p>
+     * 将指定文件重命名为新名称。如果目标目录（文件当前所在目录）存在同名文件，则自动添加编号后缀。
+     * 只有文件的上传者才能重命名。
+     * </p>
+     *
+     * @param fileId  文件ID
+     * @param newName 新文件名（含扩展名）
+     * @param userId  当前用户ID
+     * @return true 重命名成功
+     * @throws IllegalArgumentException 文件不存在、无权操作或名称无效
+     */
+    boolean renameFile(Long fileId, String newName, Long userId);
+
+    /**
+     * 重命名目录
+     * <p>
+     * 将指定目录重命名为新名称。如果同级目录存在同名，则自动添加编号后缀。
+     * 不允许重命名 id=2 的目录（User父目录）。
+     * 只有目录的创建者才能重命名。
+     * </p>
+     *
+     * @param dirId   目录ID
+     * @param newName 新目录名
+     * @param userId  当前用户ID
+     * @return true 重命名成功
+     * @throws IllegalArgumentException 目录不存在、无权操作、受保护或名称无效
+     */
+    boolean renameDirectory(Long dirId, String newName, Long userId);
+
+    /**
+     * 移动目录到其他目录
+     * <p>
+     * 将指定目录移动到目标目录下。不能移动到自身或自己的子树中。
+     * 不允许移动根目录和 id=2 的 User 父目录。
+     * 只有目录的创建者才能移动。
+     * </p>
+     *
+     * @param dirId       目录ID
+     * @param targetDirId 目标父目录ID
+     * @param userId      当前用户ID
+     * @return true 移动成功
+     * @throws IllegalArgumentException 目录不存在、无权操作、移动路径非法或目标无效
+     */
+    boolean moveDirectory(Long dirId, Long targetDirId, Long userId);
 }

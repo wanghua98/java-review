@@ -79,7 +79,7 @@ async function loadDir(dirId) {
       subDirs.value = res.data.subDirs || []
       files.value = res.data.files || []
     } else {
-      if (res.message === '用户未登录') router.push('/login')
+      if (res.message === '用户未登录' || res.code === 401) router.push('/login')
       else message.value = res.message || '加载失败'
     }
   } catch (e) {
@@ -408,7 +408,7 @@ const PREVIEWABLE_TYPES = new Set([
   'jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'heic',
   'tif', 'tiff', 'tga', 'svg', 'wmf', 'emf',
   // ── 压缩包与文本 ──
-  'zip', 'rar', 'jar', 'tar', 'gzip', 'gz', '7z',
+  'zip', 'jar', 'rar','tar', 'gzip', 'gz', '7z',
   'txt', 'md', 'xml', 'java', 'js', 'css', 'py', 'php',
   // ── 音视频与邮件 ──
   'mp3', 'wav', 'mp4', 'flv', 'avi', 'mkv', 'webm',

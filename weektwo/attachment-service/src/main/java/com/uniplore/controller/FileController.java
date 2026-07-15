@@ -3,6 +3,7 @@ package com.uniplore.controller;
 import cn.dev33.satoken.stp.StpUtil;
 import com.uniplore.pojo.*;
 import com.uniplore.result.Result;
+import com.uniplore.result.ResultMessage;
 import com.uniplore.service.FileChunkService;
 import com.uniplore.service.FileDirectoryService;
 import com.uniplore.service.FileUploadTaskService;
@@ -78,7 +79,7 @@ public class FileController {
         }
         // 判断是否登陆
         if (!StpUtil.isLogin()) {
-            return Result.error(401, "未登录", null);
+            return Result.error(400, ResultMessage.USER_NOT_LOGGED_IN.getMessage(), null);
         }
 
         return fileUploadTaskService.initFile(fileUploadTask);
@@ -139,7 +140,7 @@ public class FileController {
     public Result<DirectoryVO> getUserDirList() {
         // 检查用户是否登录
         if (!StpUtil.isLogin()) {
-            return Result.error(400, "用户未登录", null);
+            return Result.error(401, ResultMessage.USER_NOT_LOGGED_IN.getMessage(), null);
         }
         // 查询当前用户目录下内容
         DirectoryVO vo = fileDirectoryService.getUserDirectoryContents(StpUtil.getLoginIdAsLong());
@@ -164,11 +165,11 @@ public class FileController {
     public Result<DirectoryVO> getDirList(@PathVariable Long dirId) {
         // 检查用户是否登录
         if (!StpUtil.isLogin()) {
-            return Result.error(400, "用户未登录", null);
+            return Result.error(401, ResultMessage.USER_NOT_LOGGED_IN.getMessage(), null);
         }
         // 参数校验
         if (dirId == null || dirId <= 0) {
-            return Result.error(400, "参数有误", null);
+            return Result.error(400, ResultMessage.INVALID_PARAMETERS.getMessage(), null);
         }
         // 查询指定目录下内容
         DirectoryVO vo = fileDirectoryService.getDirectoryContents(dirId);
@@ -237,11 +238,6 @@ public class FileController {
      */
     @GetMapping("/inline/{fileId}.{suffix}")
     public ResponseEntity<Resource> inlineFile(@PathVariable Long fileId, @PathVariable(required = false) String suffix) {
-        // 检查用户是否登录
-        if (!StpUtil.isLogin()) {
-            // 未登录用户尝试预览文件，返回错误
-            return ResponseEntity.badRequest().build();
-        }
 
         // 查询文件信息
         FileInfo fileInfo = fileInfoMapper.selectById(fileId);
@@ -294,11 +290,11 @@ public class FileController {
                                            @RequestParam("name") String name) {
         // 检查用户是否登录
         if (!StpUtil.isLogin()) {
-            return Result.error(400, "用户未登录", null);
+            return Result.error(401, ResultMessage.USER_NOT_LOGGED_IN.getMessage(), null);
         }
         // 参数校验
         if (name == null || name.trim().isEmpty()) {
-            return Result.error(400, "目录名称不能为空", null);
+            return Result.error(400, ResultMessage.INVALID_PARAMETERS.getMessage(), null);
         }
         try {
             FileDirectory dir = fileDirectoryService.createSubDirectory(
@@ -322,7 +318,7 @@ public class FileController {
     @GetMapping("/dir/all")
     public Result<List<FileDirectory>> getAllDirs() {
         if (!StpUtil.isLogin()) {
-            return Result.error(400, "用户未登录", null);
+            return Result.error(401, ResultMessage.USER_NOT_LOGGED_IN.getMessage(), null);
         }
         List<FileDirectory> dirs = fileDirectoryService.getAllUserDirectories(StpUtil.getLoginIdAsLong());
         return Result.success(dirs);
@@ -344,7 +340,7 @@ public class FileController {
                                    @RequestParam("targetDirId") Long targetDirId) {
         // 检查用户是否登录
         if (!StpUtil.isLogin()) {
-            return Result.error(400, "用户未登录", null);
+            return Result.error(401, ResultMessage.USER_NOT_LOGGED_IN.getMessage(), null);
         }
         // 查询文件是否存在
         FileInfo fileInfo = fileInfoMapper.selectById(fileId);
@@ -383,7 +379,7 @@ public class FileController {
     public Result<String> deleteFile(@PathVariable Long fileId) {
         // 检查用户是否登录
         if (!StpUtil.isLogin()) {
-            return Result.error(400, "用户未登录", null);
+            return Result.error(401, ResultMessage.USER_NOT_LOGGED_IN.getMessage(), null);
         }
         try {
             fileDirectoryService.deleteFile(fileId, StpUtil.getLoginIdAsLong());
@@ -408,7 +404,7 @@ public class FileController {
     public Result<String> deleteDir(@PathVariable Long dirId) {
         // 检查用户是否登录
         if (!StpUtil.isLogin()) {
-            return Result.error(400, "用户未登录", null);
+            return Result.error(401, ResultMessage.USER_NOT_LOGGED_IN.getMessage(), null);
         }
         try {
             fileDirectoryService.deleteDirectory(dirId, StpUtil.getLoginIdAsLong());
@@ -453,6 +449,16 @@ public class FileController {
             case "txt" -> MediaType.valueOf("text/plain");
             case "json" -> MediaType.valueOf("application/json");
             case "xml" -> MediaType.valueOf("application/xml");
+            // 文本/代码文件（让浏览器直接展示，不弹出下载框）
+            case "java", "py", "js", "ts", "css", "html", "htm", "php" ->
+                    MediaType.valueOf("text/plain");
+            case "md" -> MediaType.valueOf("text/markdown");
+            case "yaml", "yml" -> MediaType.valueOf("application/x-yaml");
+            case "sh", "bat", "cmd" -> MediaType.valueOf("text/plain");
+            case "c", "cpp", "h", "hpp", "cs", "go", "rs", "swift" ->
+                    MediaType.valueOf("text/plain");
+            case "properties", "cfg", "conf", "ini" -> MediaType.valueOf("text/plain");
+            case "log" -> MediaType.valueOf("text/plain");
             default -> MediaType.APPLICATION_OCTET_STREAM;
         };
     }

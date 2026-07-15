@@ -53,7 +53,17 @@ public enum ResultMessage {
     /**
      * 分片保存成功且已完成合并
      */
-    CHUNK_MERGED_SUCCESS("分片保存成功,后台正在进行合并");
+    CHUNK_MERGED_SUCCESS("分片保存成功,后台正在进行合并"),
+
+    /**
+     * 用户未登录
+     */
+    USER_NOT_LOGGED_IN("用户未登录"),
+
+    /**
+     * 参数有误
+     */
+    INVALID_PARAMETERS("参数有误");
 
     /**
      * 消息文本

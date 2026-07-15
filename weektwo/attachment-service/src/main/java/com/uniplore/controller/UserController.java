@@ -5,6 +5,7 @@ import cn.hutool.core.bean.BeanUtil;
 import com.uniplore.pojo.UserDTO;
 import com.uniplore.pojo.UserVO;
 import com.uniplore.result.Result;
+import com.uniplore.result.ResultMessage;
 import com.uniplore.service.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
@@ -35,7 +36,7 @@ public class UserController {
         String password = userDTO.getPassword();
         // 进行参数校验
         if (username == null || password == null) {
-            return Result.error(400, "用户名或密码为空", null);
+            return Result.error(400, ResultMessage.INVALID_PARAMETERS.getMessage(), null);
         }
 
 
@@ -51,7 +52,7 @@ public class UserController {
     @GetMapping("/logout")
     public Result<String> doLogout() {
         if (!StpUtil.isLogin()) {
-            return Result.error(400, "用户未登录", null);
+            return Result.error(401, ResultMessage.USER_NOT_LOGGED_IN.getMessage(), null);
         }
         StpUtil.logout();
         return Result.success("登出成功");
@@ -66,7 +67,7 @@ public class UserController {
     public Result<UserVO> getInfo() {
         // 判断用户是否登录
         if (!StpUtil.isLogin()) {
-            return Result.error(400, "用户未登录", null);
+            return Result.error(401, ResultMessage.USER_NOT_LOGGED_IN.getMessage(), null);
         }
         // 获取用户信息
         UserVO userVO = BeanUtil.copyProperties(userService.getById(StpUtil.getLoginIdAsLong()), UserVO.class);
@@ -95,7 +96,7 @@ public class UserController {
     @PostMapping("/changeInfo")
     public Result<String> changeInfo(@RequestBody UserDTO userDTO) {
         if (!StpUtil.isLogin()) {
-            return Result.error(400, "用户未登录", null);
+            return Result.error(401, ResultMessage.USER_NOT_LOGGED_IN.getMessage(), null);
         }
         return userService.changeInfo(userDTO);
     }

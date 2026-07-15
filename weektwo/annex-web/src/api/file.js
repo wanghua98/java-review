@@ -125,7 +125,7 @@ export function getDownloadUrl(fileId) {
  * @returns {string}        - 完整的 kkFileView 预览地址
  */
 export function getPreviewUrl(fileId, suffix) {
-  // kkFileView 预览链接
+  // 统一使用 localhost（需要在容器内把 localhost:8001 转发到宿主机）
   const fileUrl = `http://localhost:8001/api/file/inline/${fileId}.${suffix}`
   // 标准 base64 编码并 URL 编码
   const base64 = btoa(fileUrl)

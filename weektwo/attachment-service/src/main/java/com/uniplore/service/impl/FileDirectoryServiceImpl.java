@@ -106,59 +106,100 @@ public class FileDirectoryServiceImpl extends ServiceImpl<FileDirectoryMapper, F
     }
 
     /**
-     * 获取当前用户目录下的文件夹以及文件
+     * 获取当前用户目录下的文件夹以及文件（分页）
      * <p>
-     * 根据用户ID查询其个人目录，然后获取该目录下的所有子目录和文件。
+     * 根据用户ID查询其个人目录，然后获取该目录下的所有子目录和分页后的文件列表。
      * </p>
      *
      * @param userId 当前用户ID
+     * @param page   当前页码（从1开始）
+     * @param size   每页条数
      * @return 目录文件列表，若用户目录不存在返回null
      */
     @Override
-    public DirectoryVO getUserDirectoryContents(Long userId) {
+    public DirectoryVO getUserDirectoryContents(Long userId, int page, int size) {
         // 查询当前用户的个人目录
         FileDirectory userDir = getUserDirectoryByUserId(userId);
         if (userDir == null) {
             return null;
         }
-        // 获取该目录下的子目录和文件
-        return getDirectoryContents(userDir.getId());
+        // 获取该目录下的子目录和文件（分页）
+        return getDirectoryContents(userDir.getId(), page, size);
     }
 
     /**
-     * 查看指定目录下的子目录和文件
+     * 查看指定目录下的子目录和文件（分页）
      * <p>
-     * 根据目录ID查询其下的子目录（按 sort 正序）和文件（按 create_time 倒序）。
+     * 目录和文件**合并计数**参与分页，返回当前页的目录子集和文件子集。
+     * 目录排在前面（按 sort 正序），文件排在后面（按 create_time 倒序）。
      * </p>
      *
      * @param directoryId 目录ID
+     * @param page        当前页码（从1开始）
+     * @param size        每页条数
      * @return 目录文件列表，若目录不存在返回null
      */
     @Override
-    public DirectoryVO getDirectoryContents(Long directoryId) {
+    public DirectoryVO getDirectoryContents(Long directoryId, int page, int size) {
         // 查询当前目录信息
         FileDirectory currentDir = getById(directoryId);
         if (currentDir == null) {
             return null;
         }
 
-        // 查询子目录列表（按照 sort 正序排列）
-        List<FileDirectory> subDirs = list(
+        // 查询当前目录下所有子目录
+        List<FileDirectory> allSubDirs = list(
                 new QueryWrapper<FileDirectory>()
                         .eq("parent_id", directoryId)
                         .eq("status", 1)
                         .orderByAsc("sort")
         );
 
-        // 查询当前目录下的文件列表（按照上传时间倒序）
-        List<FileInfo> files = fileInfoMapper.selectList(
+        // 查询当前目录下的文件总数
+        Long fileTotal = fileInfoMapper.selectCount(
                 new QueryWrapper<FileInfo>()
                         .eq("parent_id", directoryId)
                         .eq("status", 1)
-                        .orderByDesc("create_time")
         );
 
-        return new DirectoryVO(currentDir, subDirs, files);
+        // 总条数 = 子目录数 + 文件数
+        long totalCount = allSubDirs.size() + (fileTotal != null ? fileTotal : 0L);
+        int totalPages = (int) Math.max(1, Math.ceil((double) totalCount / size));
+
+        // 计算当前页在合并列表中的起始位置
+        int offset = (page - 1) * size;
+
+        // 截取当前页对应的子目录
+        int dirStart = Math.min(offset, allSubDirs.size());
+        int dirEnd = Math.min(offset + size, allSubDirs.size());
+        List<FileDirectory> pageSubDirs = allSubDirs.subList(dirStart, dirEnd);
+
+        // 计算文件查询偏移
+        int dirCountOnPage = pageSubDirs.size();
+        int fileQueryOffset = Math.max(0, offset - allSubDirs.size());
+        int fileQuerySize = size - dirCountOnPage;
+
+        List<FileInfo> pageFiles = new java.util.ArrayList<>();
+        if (fileQuerySize > 0) {
+            // 手动分页查询文件
+            pageFiles = fileInfoMapper.selectList(
+                    new QueryWrapper<FileInfo>()
+                            .eq("parent_id", directoryId)
+                            .eq("status", 1)
+                            .orderByDesc("create_time")
+                            .last("LIMIT " + fileQueryOffset + ", " + fileQuerySize)
+            );
+        }
+
+        DirectoryVO vo = new DirectoryVO();
+        vo.setCurrentDir(currentDir);
+        vo.setSubDirs(pageSubDirs);
+        vo.setFiles(pageFiles);
+        vo.setCurrentPage(page);
+        vo.setPageSize(size);
+        vo.setTotalCount(totalCount);
+        vo.setTotalPages(totalPages);
+        return vo;
     }
 
     /**

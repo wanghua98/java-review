@@ -5,7 +5,7 @@
   - 新建文件夹、上传文件（分片上传）、移动文件、下载文件
 -->
 <script setup>
-import {ref, nextTick, onMounted} from 'vue'
+import {ref, computed, watch, nextTick, onMounted} from 'vue'
 import {useRouter} from 'vue-router'
 import {createSHA256} from 'hash-wasm';
 import {
@@ -24,6 +24,11 @@ const currentDir = ref(null)
 const subDirs = ref([])
 // 当前目录下的文件列表
 const files = ref([])
+// 分页信息
+const currentPage = ref(1)
+const pageSize = ref(10)
+const totalCount = ref(0)
+const totalPages = ref(0)
 // 当前目录导航历史
 const dirHistory = ref([])
 // 加载状态
@@ -129,16 +134,27 @@ function cancelRename() {
 
 /**
  * 加载指定目录的内容
+ * @param {number|null} dirId - 目录ID，null表示加载用户根目录
+ * @param {number} [page] - 页码（可选，不传则使用当前页码）
  */
-async function loadDir(dirId) {
+async function loadDir(dirId, page) {
   loading.value = true
   message.value = ''
+  if (page != null) currentPage.value = page
   try {
-    const res = dirId ? await getDirList(dirId) : await getUserDirList()
+    const res = dirId
+      ? await getDirList(dirId, currentPage.value, pageSize.value)
+      : await getUserDirList(currentPage.value, pageSize.value)
     if (res.code === 200 && res.data) {
       currentDir.value = res.data.currentDir
       subDirs.value = res.data.subDirs || []
       files.value = res.data.files || []
+      // 更新分页信息
+      currentPage.value = res.data.currentPage || 1
+      pageSize.value = res.data.pageSize || 20
+      totalCount.value = res.data.totalCount || 0
+      // 如果后端没有返回 totalPages，自己计算
+      totalPages.value = res.data.totalPages || Math.ceil(totalCount.value / pageSize.value) || 1
     } else {
       if (res.message === '用户未登录' || res.code === 401) router.push('/login')
       else message.value = res.message || '加载失败'
@@ -150,16 +166,64 @@ async function loadDir(dirId) {
   }
 }
 
+/** 跳转到指定页面 */
+function goToPage(page) {
+  if (page < 1 || page > totalPages.value || page === currentPage.value) return
+  loadDir(currentDir.value?.id, page)
+}
+
+/** 上一页 */
+function prevPage() {
+  goToPage(currentPage.value - 1)
+}
+
+/** 下一页 */
+function nextPage() {
+  goToPage(currentPage.value + 1)
+}
+
+/** 计算可见页码列表（最多显示 7 个数字按钮，-1 显示为 ...） */
+const visiblePages = computed(() => {
+  const total = totalPages.value
+  const current = currentPage.value
+  const maxVisible = 7
+  if (total <= maxVisible) {
+    return Array.from({length: total}, (_, i) => i + 1)
+  }
+  if (current <= 4) {
+    return [...Array.from({length: 5}, (_, i) => i + 1), -1, total]
+  }
+  if (current >= total - 3) {
+    return [1, -1, ...Array.from({length: 5}, (_, i) => total - 4 + i)]
+  }
+  return [1, -1, current - 1, current, current + 1, -1, total]
+})
+
+/** 每页条数选项 */
+const pageSizeOptions = [10, 20, 50, 100]
+
 function enterDir(dir) {
-  if (currentDir.value) dirHistory.value.push(currentDir.value)
+  // 进入子目录时保存当前目录和页码，方便返回时恢复
+  if (currentDir.value) {
+    dirHistory.value.push({ dir: currentDir.value, page: currentPage.value })
+  }
+  currentPage.value = 1
   loadDir(dir.id)
 }
 
 function goBack() {
   if (dirHistory.value.length === 0) return
-  currentDir.value = dirHistory.value.pop()
+  const prev = dirHistory.value.pop()
+  currentDir.value = prev.dir
+  currentPage.value = prev.page
   loadDir(currentDir.value.id)
 }
+
+/** 监听每页条数变化，自动刷新 */
+watch(pageSize, () => {
+  currentPage.value = 1
+  loadDir(currentDir.value?.id)
+})
 
 /** 新建文件夹 */
 async function handleCreateDir() {
@@ -572,7 +636,7 @@ onMounted(() => {
 
     <!-- 文件列表 -->
     <div v-else class="list">
-      <div v-if="subDirs.length === 0 && files.length === 0" class="empty">此目录为空</div>
+      <div v-if="subDirs.length === 0 && files.length === 0 && totalCount === 0" class="empty">此目录为空</div>
 
       <div v-for="dir in subDirs" :key="dir.id" class="item dir" @click="enterDir(dir)">
         <span class="icon">📁</span>
@@ -605,6 +669,32 @@ onMounted(() => {
         <span v-if="isPreviewable(file)" class="action-link preview" @click="previewFile(file)">预览</span>
         <span class="action-link move" @click="showMovePicker(file, 'file')">移动</span>
         <span class="action-link del" @click="confirmDeleteFile(file)">删除</span>
+      </div>
+    </div>
+
+    <!-- 文件分页控制 -->
+    <div class="pagination" v-if="totalCount > 0">
+      <div class="page-left">
+        <span class="page-info">共 {{ totalCount }} 个文件/文件夹</span>
+        <span class="page-size-select">
+          每页
+          <select v-model="pageSize">
+            <option v-for="s in pageSizeOptions" :key="s" :value="s">{{ s }}</option>
+          </select>
+          条
+        </span>
+      </div>
+      <div class="page-right">
+        <span class="page-info">{{ currentPage }}/{{ totalPages }} 页</span>
+        <div class="page-btns">
+          <button class="btn page-btn" :disabled="currentPage <= 1" @click="prevPage">‹ 上一页</button>
+          <template v-for="p in visiblePages" :key="p">
+            <span v-if="p === -1" class="page-ellipsis">…</span>
+            <button v-else class="btn page-btn" :class="{ active: p === currentPage }"
+                    @click="goToPage(p)">{{ p }}</button>
+          </template>
+          <button class="btn page-btn" :disabled="currentPage >= totalPages" @click="nextPage">下一页 ›</button>
+        </div>
       </div>
     </div>
 
@@ -813,6 +903,97 @@ onMounted(() => {
 
 .action-link.del {
   color: #f56c6c;
+}
+
+/* 分页 */
+.pagination {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 0;
+  font-size: 13px;
+  color: #666;
+  gap: 12px;
+}
+
+.page-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.page-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.page-size-select {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  color: #999;
+}
+
+.page-size-select select {
+  padding: 2px 6px;
+  font-size: 13px;
+  border: 1px solid #ddd;
+  border-radius: 3px;
+  outline: none;
+  cursor: pointer;
+  background: #fff;
+}
+
+.page-size-select select:hover {
+  border-color: #409eff;
+}
+
+.page-btns {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.page-btn {
+  min-width: 32px;
+  padding: 4px 10px;
+  font-size: 13px;
+  text-align: center;
+  cursor: pointer;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background: #fff;
+  color: #333;
+  transition: all 0.15s;
+}
+
+.page-btn:hover:not(:disabled) {
+  border-color: #409eff;
+  color: #409eff;
+}
+
+.page-btn.active {
+  background: #409eff;
+  color: #fff;
+  border-color: #409eff;
+}
+
+.page-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.page-ellipsis {
+  padding: 0 4px;
+  color: #999;
+  user-select: none;
+}
+
+.page-info {
+  font-size: 13px;
+  color: #999;
 }
 
 .empty {

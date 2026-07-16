@@ -53,14 +53,14 @@ async function postFile(path, data) {
 
 // ==================== 导出方法 ====================
 
-/** 获取当前用户目录下的文件夹和文件 */
-export function getUserDirList() {
-  return get('/api/file/dir/list')
+/** 获取当前用户目录下的文件夹和文件（分页） */
+export function getUserDirList(page = 1, size = 20) {
+  return get(`/api/file/dir/list?page=${page}&size=${size}`)
 }
 
-/** 查看指定目录下的子目录和文件 */
-export function getDirList(dirId) {
-  return get('/api/file/dir/list/' + dirId)
+/** 查看指定目录下的子目录和文件（分页） */
+export function getDirList(dirId, page = 1, size = 20) {
+  return get(`/api/file/dir/list/${dirId}?page=${page}&size=${size}`)
 }
 
 /** 获取当前用户的所有目录（平铺列表，用于移动文件） */

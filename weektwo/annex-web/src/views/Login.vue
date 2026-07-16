@@ -33,7 +33,7 @@ async function handleLogin() {
   message.value = ''
   // 调用登录 API
   const res = await login(username.value, password.value)
-  if (res.code === 200) {
+  if (res && res.code === 200) {
     // 先获取用户信息更新全局状态
     const {getUserInfo} = await import('@/api/user.js')
     const infoRes = await getUserInfo()

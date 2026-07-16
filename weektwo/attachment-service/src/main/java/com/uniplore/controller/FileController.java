@@ -128,22 +128,25 @@ public class FileController {
 
 
     /**
-     * 获取当前用户目录下的文件夹以及文件
+     * 获取当前用户目录下的文件夹以及文件（分页）
      * <p>
-     * 查询当前登录用户的个人目录，返回其下的子目录列表（按sort排序）和文件列表（按上传时间倒序）。
+     * 查询当前登录用户的个人目录，返回其下的子目录列表（按sort排序）和文件列表（按上传时间倒序，分页）。
      * 用于前端登录后展示用户的文件管理首页。
      * </p>
      *
+     * @param page 当前页码（从1开始，默认1）
+     * @param size 每页条数（默认20）
      * @return 目录文件列表
      */
     @GetMapping("/dir/list")
-    public Result<DirectoryVO> getUserDirList() {
+    public Result<DirectoryVO> getUserDirList(@RequestParam(value = "page", defaultValue = "1") int page,
+                                               @RequestParam(value = "size", defaultValue = "20") int size) {
         // 检查用户是否登录
         if (!StpUtil.isLogin()) {
             return Result.error(401, ResultMessage.USER_NOT_LOGGED_IN.getMessage(), null);
         }
         // 查询当前用户目录下内容
-        DirectoryVO vo = fileDirectoryService.getUserDirectoryContents(StpUtil.getLoginIdAsLong());
+        DirectoryVO vo = fileDirectoryService.getUserDirectoryContents(StpUtil.getLoginIdAsLong(), page, size);
         if (vo == null) {
             return Result.error(400, "用户目录不存在", null);
         }
@@ -152,17 +155,21 @@ public class FileController {
 
 
     /**
-     * 查看指定目录下的文件以及目录
+     * 查看指定目录下的文件以及目录（分页）
      * <p>
-     * 根据目录ID查询其下的子目录和文件列表。
+     * 根据目录ID查询其下的子目录和分页后的文件列表。
      * 前端点击目录树或面包屑导航时调用此接口进入子目录。
      * </p>
      *
      * @param dirId 目录ID
+     * @param page  当前页码（从1开始，默认1）
+     * @param size  每页条数（默认20）
      * @return 目录文件列表
      */
     @GetMapping("/dir/list/{dirId}")
-    public Result<DirectoryVO> getDirList(@PathVariable Long dirId) {
+    public Result<DirectoryVO> getDirList(@PathVariable Long dirId,
+                                          @RequestParam(value = "page", defaultValue = "1") int page,
+                                          @RequestParam(value = "size", defaultValue = "20") int size) {
         // 检查用户是否登录
         if (!StpUtil.isLogin()) {
             return Result.error(401, ResultMessage.USER_NOT_LOGGED_IN.getMessage(), null);
@@ -172,7 +179,7 @@ public class FileController {
             return Result.error(400, ResultMessage.INVALID_PARAMETERS.getMessage(), null);
         }
         // 查询指定目录下内容
-        DirectoryVO vo = fileDirectoryService.getDirectoryContents(dirId);
+        DirectoryVO vo = fileDirectoryService.getDirectoryContents(dirId, page, size);
         if (vo == null) {
             return Result.error(400, "目录不存在", null);
         }

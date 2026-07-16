@@ -47,26 +47,30 @@ public interface FileDirectoryService extends IService<FileDirectory> {
     FileDirectory renameUserDirectory(Long userId, String newName);
 
     /**
-     * 获取当前用户目录下的文件夹以及文件
+     * 获取当前用户目录下的文件夹以及文件（分页）
      * <p>
-     * 查询当前登录用户的个人目录，并返回其下的子目录列表和文件列表。
+     * 查询当前登录用户的个人目录，并返回其下的子目录列表和分页后的文件列表。
      * </p>
      *
      * @param userId 当前用户ID
+     * @param page   当前页码（从1开始）
+     * @param size   每页条数
      * @return 目录文件列表，若用户目录不存在返回null
      */
-    DirectoryVO getUserDirectoryContents(Long userId);
+    DirectoryVO getUserDirectoryContents(Long userId, int page, int size);
 
     /**
-     * 查看指定目录下的子目录和文件
+     * 查看指定目录下的子目录和文件（分页）
      * <p>
-     * 根据目录ID查询其下的子目录（按 sort 正序）和文件（按 create_time 倒序）。
+     * 根据目录ID查询其下的子目录（按 sort 正序）和分页后的文件列表（按 create_time 倒序）。
      * </p>
      *
      * @param directoryId 目录ID
+     * @param page        当前页码（从1开始）
+     * @param size        每页条数
      * @return 目录文件列表，若目录不存在返回null
      */
-    DirectoryVO getDirectoryContents(Long directoryId);
+    DirectoryVO getDirectoryContents(Long directoryId, int page, int size);
 
     /**
      * 在指定目录下创建子目录

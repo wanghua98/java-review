@@ -28,7 +28,8 @@ public class CorsConfig implements WebMvcConfigurer {
         config.setAllowedOriginPatterns(Arrays.asList(
                 "http://localhost:5173",
                 "http://127.0.0.1:5173",
-                "http://*:*"
+                "http://*:*",
+                "https://a.zipq.qzz.io"
         ));
         // 允许携带 Cookie（Sa-Token 需要）
         config.setAllowCredentials(true);

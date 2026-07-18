@@ -21,7 +21,10 @@ public class PreviewUrlService {
     public PreviewTicketVO createPreviewTicket(FileInfo fileInfo) {
         SignedFileTokenService.IssuedToken issued = tokenService.issue(fileInfo.getId());
         String sourceUrl = trimTrailingSlash(properties.getSourceBaseUrl())
-                + "/api/public/preview-files/" + issued.token();
+                // kkFileView 通过源 URL 的后缀识别文件类型；票据本身没有后缀，
+                // 因此追加已编码的原始文件名作为仅用于类型识别的路径段。
+                + "/api/public/preview-files/" + issued.token()
+                + "/" + urlEncode(fileInfo.getFileName());
         String encodedSourceUrl = Base64.getEncoder()
                 .encodeToString(sourceUrl.getBytes(StandardCharsets.UTF_8));
         String previewUrl = trimTrailingSlash(properties.getPublicBaseUrl())

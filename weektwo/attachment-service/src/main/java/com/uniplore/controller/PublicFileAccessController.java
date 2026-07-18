@@ -34,8 +34,19 @@ public class PublicFileAccessController {
 
     @GetMapping("/preview-files/{ticket}")
     public ResponseEntity<Resource> getPreviewFile(@PathVariable String ticket) {
+        return getPreviewFile(ticket, null);
+    }
+
+    /**
+     * 文件名作为 URL 的最后一段，使 kkFileView 可以从扩展名识别格式。
+     * 它不是授权依据，仍必须与短期票据绑定的实际文件名一致。
+     */
+    @GetMapping("/preview-files/{ticket}/{fileName:.+}")
+    public ResponseEntity<Resource> getPreviewFile(
+            @PathVariable String ticket, @PathVariable String fileName) {
         return signedFileTokenService.verify(ticket)
                 .map(this::findActiveFile)
+                .filter(file -> fileName == null || fileName.equals(file.getFileName()))
                 .map(file -> fileResourceService.asResponse(file, true))
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }

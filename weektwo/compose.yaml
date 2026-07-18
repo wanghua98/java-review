@@ -47,7 +47,8 @@ services:
       REDIS_PASSWORD: ${REDIS_PASSWORD:?请在 .env 中设置 REDIS_PASSWORD}
       FILE_UPLOAD_PATH: /data/uploads
       PREVIEW_SIGNING_SECRET: ${PREVIEW_SIGNING_SECRET:?请在 .env 中设置 PREVIEW_SIGNING_SECRET}
-      PREVIEW_SOURCE_BASE_URL: http://attachment-service:8001
+      # 部分 kkFileView 预览类型由浏览器直接拉取源文件，必须使用浏览器可达的 HTTPS 地址。
+      PREVIEW_SOURCE_BASE_URL: ${PREVIEW_SOURCE_BASE_URL:-https://a.zipq.qzz.io}
       PREVIEW_PUBLIC_BASE_URL: /preview
       PREVIEW_TICKET_TTL: 2m
       ADMIN_INITIAL_PASSWORD: ${ADMIN_INITIAL_PASSWORD:?请在 .env 中设置 ADMIN_INITIAL_PASSWORD}
@@ -70,7 +71,7 @@ services:
       KK_SERVER_PORT: 8012
       KK_CONTEXT_PATH: /preview
       KK_BASE_URL: ${APP_PUBLIC_BASE_URL:-http://localhost:8080}/preview/
-      KK_TRUST_HOST: attachment-service
+      KK_TRUST_HOST: ${KK_TRUST_HOST:-a.zipq.qzz.io}
       KK_NOT_TRUST_HOST: default
       KK_FILE_DIR: /opt/kkfileview-cache
       KK_CACHE_TYPE: jdk

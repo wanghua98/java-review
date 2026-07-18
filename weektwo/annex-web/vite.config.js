@@ -24,6 +24,10 @@ export default defineConfig({
         target: 'http://localhost:8001',
         changeOrigin: false,
       },
+      '/preview': {
+        target: 'http://localhost:8012',
+        changeOrigin: true,
+      },
     },
   },
 })

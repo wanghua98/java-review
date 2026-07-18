@@ -133,16 +133,37 @@ export function getDownloadUrl(fileId) {
   return '/api/file/download/' + fileId
 }
 
-/**
- * 获取 kkFileView 在线预览 URL
- * @param {number} fileId - 文件ID
- * @param {string} suffix  - 文件后缀（如 'jpg', 'pdf'）
- * @returns {string}        - 完整的 kkFileView 预览地址
- */
-export function getPreviewUrl(fileId, suffix) {
-  // 统一使用 localhost（需要在容器内把 localhost:8001 转发到宿主机）
-  const fileUrl = `http://192.168.2.42:8001/api/file/inline/${fileId}.${suffix}`
-  // 标准 base64 编码并 URL 编码
-  const base64 = btoa(fileUrl)
-  return `http://192.168.2.42:8012/onlinePreview?url=${encodeURIComponent(base64)}`
+/** 获取当前用户文件的短期 kkFileView 预览地址。 */
+export function createPreviewTicket(fileId) {
+  return postJson('/api/file/preview-ticket/' + fileId, {})
+}
+
+/** 创建文件分享，默认有效24小时。 */
+export function createFileShare(fileId, expiresInHours = 24) {
+  return postJson('/api/file/shares', {fileId, expiresInHours})
+}
+
+/** 查看当前用户创建过的分享。 */
+export function listFileShares() {
+  return get('/api/file/shares')
+}
+
+/** 撤销分享。 */
+export function revokeFileShare(shareId) {
+  return postForm(`/api/file/shares/${shareId}/revoke`, {})
+}
+
+/** 获取公开分享信息。 */
+export function getPublicShare(token) {
+  return get(`/api/public/shares/${encodeURIComponent(token)}`)
+}
+
+/** 获取公开分享的短期预览地址。 */
+export function createPublicSharePreviewTicket(token) {
+  return get(`/api/public/shares/${encodeURIComponent(token)}/preview-ticket`)
+}
+
+/** 获取公开分享下载地址。 */
+export function getPublicShareDownloadUrl(token) {
+  return `/api/public/shares/${encodeURIComponent(token)}/download`
 }

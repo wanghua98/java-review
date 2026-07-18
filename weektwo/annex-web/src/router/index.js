@@ -13,6 +13,7 @@ import Login from '@/views/Login.vue'
 import Register from '@/views/Register.vue'
 import FileManager from '@/views/FileManager.vue'
 import UserInfo from '@/views/UserInfo.vue'
+import ShareView from '@/views/ShareView.vue'
 
 // 引入认证状态（ref 是响应式的，跨模块共享同一实例）
 import { user } from '@/stores/auth.js'
@@ -40,6 +41,11 @@ const routes = [
     path: '/user-info',
     name: 'UserInfo',
     component: UserInfo,
+  },
+  {
+    path: '/share/:token',
+    name: 'PublicShare',
+    component: ShareView,
   },
   {
     path: '/:pathMatch(.*)*',

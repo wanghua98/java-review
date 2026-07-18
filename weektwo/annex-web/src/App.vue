@@ -14,7 +14,8 @@ const { user } = useAuth()
 /** 页面启动时验证当前会话 */
 onMounted(async () => {
   const loggedIn = await initAuth()
-  if (!loggedIn) {
+  const isPublicShare = router.currentRoute.value.name === 'PublicShare'
+  if (!loggedIn && !isPublicShare) {
     router.push('/login')
   } else if (router.currentRoute.value.name === 'Login' || router.currentRoute.value.name === 'Register') {
     router.push('/files')

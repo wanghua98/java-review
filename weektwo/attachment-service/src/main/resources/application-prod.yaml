@@ -1,0 +1,39 @@
+spring:
+  datasource:
+    username: ${DB_USERNAME:attachment}
+    password: ${DB_PASSWORD}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: ${DB_URL:jdbc:mysql://mysql:3306/myapp?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true}
+  data:
+    redis:
+      database: ${REDIS_DATABASE:1}
+      host: ${REDIS_HOST:redis}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD}
+      timeout: 10s
+  servlet:
+    multipart:
+      max-file-size: 100MB
+      max-request-size: 100MB
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
+
+file:
+  upload-path: ${FILE_UPLOAD_PATH:/data/uploads}
+
+mybatis-plus:
+  configuration:
+    log-impl: org.apache.ibatis.logging.nologging.NoLoggingImpl
+
+sa-token:
+  # 登录令牌属于凭据，生产日志中禁止输出。
+  is-log: false
+  cookie:
+    http-only: true
+    same-site: Lax
+    # 本地 HTTP 保持 false；部署到 HTTPS 域名时通过环境变量设为 true。
+    secure: ${SA_TOKEN_COOKIE_SECURE:false}
+
+server:
+  forward-headers-strategy: framework
+  shutdown: graceful

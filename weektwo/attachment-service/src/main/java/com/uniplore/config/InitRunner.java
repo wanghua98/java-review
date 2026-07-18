@@ -9,6 +9,7 @@ import com.uniplore.util.PasswordUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 /**
@@ -41,7 +42,8 @@ public class InitRunner implements CommandLineRunner {
     /**
      * 默认管理员密码
      */
-    private static final String DEFAULT_ADMIN_PASSWORD = "aa";
+    @Value("${bootstrap.admin-password}")
+    private String initialAdminPassword;
 
     /**
      * 根目录名称
@@ -65,13 +67,13 @@ public class InitRunner implements CommandLineRunner {
             // 创建默认ADMIN用户
             User admin = new User();
             admin.setUsername(DEFAULT_ADMIN_USERNAME);
-            admin.setPassword(PasswordUtil.encode(DEFAULT_ADMIN_PASSWORD));
+            admin.setPassword(PasswordUtil.encode(initialAdminPassword));
             admin.setNickname("管理员");
             admin.setRole(RoleConstants.ADMIN);
             admin.setStatus(1);
             userMapper.insert(admin);
             adminId = admin.getId();
-            log.info("初始化：创建默认管理员用户（用户名：{}，密码：{}）", DEFAULT_ADMIN_USERNAME, DEFAULT_ADMIN_PASSWORD);
+            log.info("初始化：已创建管理员用户（用户名：{}）", DEFAULT_ADMIN_USERNAME);
         }
 
         // 2. 检查根目录是否存在

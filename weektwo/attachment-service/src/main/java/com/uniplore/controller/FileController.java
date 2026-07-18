@@ -205,12 +205,14 @@ public class FileController {
     @LogRecord("下载文件")
     @GetMapping("/download/{fileId}")
     public ResponseEntity<Resource> downloadFile(@PathVariable Long fileId) {
-
-
+        if (!StpUtil.isLogin()) {
+            return ResponseEntity.status(401).build();
+        }
         // 查询文件信息
         FileInfo fileInfo = fileInfoMapper.selectById(fileId);
-        if (fileInfo == null || fileInfo.getStatus() == null || fileInfo.getStatus() < 1) {
-            return ResponseEntity.badRequest().build();
+        if (fileInfo == null || fileInfo.getStatus() == null || fileInfo.getStatus() < 1
+                || !Long.valueOf(StpUtil.getLoginIdAsLong()).equals(fileInfo.getCreateUser())) {
+            return ResponseEntity.notFound().build();
         }
 
         // 拼接完整存储路径
@@ -252,11 +254,15 @@ public class FileController {
     @LogRecord("预览文件")
     @GetMapping("/inline/{fileId}.{suffix}")
     public ResponseEntity<Resource> inlineFile(@PathVariable Long fileId, @PathVariable(required = false) String suffix) {
-
+        if (!StpUtil.isLogin()) {
+            return ResponseEntity.status(401).build();
+        }
         // 查询文件信息
         FileInfo fileInfo = fileInfoMapper.selectById(fileId);
-        if (fileInfo == null || fileInfo.getStatus() == null || fileInfo.getStatus() < 1 || suffix == null || suffix.isEmpty()) {
-            return ResponseEntity.badRequest().build();
+        if (fileInfo == null || fileInfo.getStatus() == null || fileInfo.getStatus() < 1
+                || suffix == null || suffix.isEmpty()
+                || !Long.valueOf(StpUtil.getLoginIdAsLong()).equals(fileInfo.getCreateUser())) {
+            return ResponseEntity.notFound().build();
         }
 
         // 拼接完整存储路径

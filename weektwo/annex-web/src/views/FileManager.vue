@@ -13,7 +13,7 @@ import {
   initUpload, uploadChunk, moveFile, moveDir,
   deleteFile, deleteDir,
   renameFile, renameDir,
-  getPreviewUrl,
+  createPreviewTicket, createFileShare, listFileShares, revokeFileShare,
 } from '@/api/file.js'
 
 const router = useRouter()
@@ -75,6 +75,16 @@ const deleteTarget = ref(null)   // { type:'file'|'dir', item }
 
 // 重命名（inline edit）
 const renameTarget = ref(null)  // { type:'file'|'dir', item, name }
+
+// 文件分享
+const shareTarget = ref(null)
+const shareExpiryHours = ref(24)
+const shareLink = ref('')
+const shareBusy = ref(false)
+const shareMessage = ref('')
+const showShareManager = ref(false)
+const managedShares = ref([])
+const sharesLoading = ref(false)
 
 /** 开始重命名：点击文件名/目录名时触发 */
 function startRename(type, item, event) {
@@ -579,11 +589,97 @@ function isPreviewable(file) {
 /**
  * 打开 kkFileView 在线预览
  */
-function previewFile(file) {
-  const suffix = getFileSuffix(file.fileName)
-  if (!suffix) return
-  const url = getPreviewUrl(file.id, suffix)
-  window.open(url, '_blank')
+async function previewFile(file) {
+  const previewWindow = window.open('about:blank', '_blank')
+  if (previewWindow) previewWindow.opener = null
+  try {
+    const res = await createPreviewTicket(file.id)
+    if (res.code === 200 && res.data?.previewUrl) {
+      if (previewWindow) previewWindow.location.replace(res.data.previewUrl)
+      else window.location.href = res.data.previewUrl
+    } else {
+      if (previewWindow) previewWindow.close()
+      message.value = '预览失败: ' + (res.message || '无法创建预览票据')
+    }
+  } catch (e) {
+    if (previewWindow) previewWindow.close()
+    message.value = '预览服务暂时不可用'
+  }
+}
+
+function openShare(file) {
+  shareTarget.value = file
+  shareExpiryHours.value = 24
+  shareLink.value = ''
+  shareMessage.value = ''
+}
+
+function closeShare() {
+  shareTarget.value = null
+  shareLink.value = ''
+  shareMessage.value = ''
+}
+
+async function generateShare() {
+  if (!shareTarget.value || shareBusy.value) return
+  shareBusy.value = true
+  shareMessage.value = ''
+  try {
+    const res = await createFileShare(shareTarget.value.id, Number(shareExpiryHours.value))
+    if (res.code === 200 && res.data?.sharePath) {
+      shareLink.value = new URL(res.data.sharePath, window.location.origin).toString()
+      shareMessage.value = '分享链接已生成，请及时复制保存'
+    } else {
+      shareMessage.value = res.message || '创建分享失败'
+    }
+  } catch (e) {
+    shareMessage.value = '创建分享失败: ' + e.message
+  } finally {
+    shareBusy.value = false
+  }
+}
+
+async function copyShareLink() {
+  if (!shareLink.value) return
+  try {
+    await navigator.clipboard.writeText(shareLink.value)
+    shareMessage.value = '分享链接已复制'
+  } catch (e) {
+    const input = document.querySelector('.share-link-input')
+    if (input) {
+      input.select()
+      document.execCommand('copy')
+      shareMessage.value = '分享链接已复制'
+    }
+  }
+}
+
+async function openShareManager() {
+  showShareManager.value = true
+  sharesLoading.value = true
+  try {
+    const res = await listFileShares()
+    managedShares.value = res.code === 200 ? (res.data || []) : []
+    if (res.code !== 200) message.value = res.message || '加载分享记录失败'
+  } catch (e) {
+    message.value = '加载分享记录失败'
+  } finally {
+    sharesLoading.value = false
+  }
+}
+
+async function revokeShare(share) {
+  if (share.status !== 'ACTIVE') return
+  const res = await revokeFileShare(share.id)
+  if (res.code === 200) {
+    share.status = 'REVOKED'
+  } else {
+    message.value = res.message || '撤销分享失败'
+  }
+}
+
+function formatDateTime(value) {
+  return value ? new Date(value).toLocaleString() : '-'
 }
 
 onMounted(() => {
@@ -598,6 +694,7 @@ onMounted(() => {
       <h2>我的文件</h2>
       <div class="actions">
         <button class="btn" @click="showNewDirInput = !showNewDirInput">+ 新建文件夹</button>
+        <button class="btn" @click="openShareManager">分享管理</button>
         <label class="btn upload-btn" :class="{ disabled: uploading }">
           {{ uploading ? '上传中...' : '上传文件' }}
           <input type="file" hidden :disabled="uploading" @change="handleUpload"/>
@@ -667,6 +764,7 @@ onMounted(() => {
         <span class="size">{{ formatFileSize(file.fileSize) }}</span>
         <a class="action-link" :href="getDownloadUrl(file.id)" target="_blank">下载</a>
         <span v-if="isPreviewable(file)" class="action-link preview" @click="previewFile(file)">预览</span>
+        <span class="action-link share" @click="openShare(file)">分享</span>
         <span class="action-link move" @click="showMovePicker(file, 'file')">移动</span>
         <span class="action-link del" @click="confirmDeleteFile(file)">删除</span>
       </div>
@@ -738,6 +836,65 @@ onMounted(() => {
         <div class="move-actions">
           <button class="btn del-confirm" @click="handleDelete">确定删除</button>
           <button class="btn cancel" @click="cancelDelete">取消</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 创建文件分享 -->
+    <div class="move-modal" v-if="shareTarget">
+      <div class="move-box share-box">
+        <p><strong>分享「{{ shareTarget.fileName }}」</strong></p>
+        <template v-if="!shareLink">
+          <label class="share-expiry">
+            有效期
+            <select v-model.number="shareExpiryHours">
+              <option :value="1">1小时</option>
+              <option :value="24">1天</option>
+              <option :value="72">3天</option>
+              <option :value="168">7天</option>
+              <option :value="720">30天</option>
+            </select>
+          </label>
+          <p class="del-hint">任何获得链接的人都可以在有效期内预览和下载文件。</p>
+          <div class="move-actions">
+            <button class="btn share-create" :disabled="shareBusy" @click="generateShare">
+              {{ shareBusy ? '生成中...' : '生成分享链接' }}
+            </button>
+            <button class="btn cancel" @click="closeShare">取消</button>
+          </div>
+        </template>
+        <template v-else>
+          <input class="share-link-input" :value="shareLink" readonly @focus="$event.target.select()"/>
+          <p class="del-hint">出于安全考虑，服务端不保存原始分享令牌，请现在复制此链接。</p>
+          <div class="move-actions">
+            <button class="btn share-create" @click="copyShareLink">复制链接</button>
+            <button class="btn cancel" @click="closeShare">完成</button>
+          </div>
+        </template>
+        <p v-if="shareMessage" class="share-message">{{ shareMessage }}</p>
+      </div>
+    </div>
+
+    <!-- 分享管理 -->
+    <div class="move-modal" v-if="showShareManager">
+      <div class="move-box share-manager-box">
+        <p><strong>分享管理</strong></p>
+        <p v-if="sharesLoading" class="del-hint">正在加载...</p>
+        <div v-else-if="managedShares.length" class="share-list">
+          <div v-for="share in managedShares" :key="share.id" class="share-row">
+            <div class="share-info">
+              <strong>{{ share.fileName }}</strong>
+              <span>有效期至 {{ formatDateTime(share.expiresAt) }}</span>
+            </div>
+            <span :class="['share-status', share.status.toLowerCase()]">
+              {{ share.status === 'ACTIVE' ? '有效' : share.status === 'EXPIRED' ? '已过期' : '已撤销' }}
+            </span>
+            <button v-if="share.status === 'ACTIVE'" class="btn revoke-btn" @click="revokeShare(share)">撤销</button>
+          </div>
+        </div>
+        <p v-else class="del-hint">暂无分享记录</p>
+        <div class="move-actions">
+          <button class="btn cancel" @click="showShareManager = false">关闭</button>
         </div>
       </div>
     </div>
@@ -895,6 +1052,10 @@ onMounted(() => {
 
 .action-link.preview {
   color: #e6a23c;
+}
+
+.action-link.share {
+  color: #8e44ad;
 }
 
 .action-link.move {
@@ -1133,4 +1294,22 @@ onMounted(() => {
   background: #e04040;
   border-color: #e04040;
 }
+
+.share-box { min-width: 420px; }
+.share-expiry { display: flex; align-items: center; gap: 12px; margin: 18px 0 8px; font-size: 14px; }
+.share-expiry select { padding: 6px 10px; border: 1px solid #ddd; border-radius: 4px; }
+.share-link-input { width: 100%; box-sizing: border-box; padding: 9px 10px; margin: 12px 0 4px; border: 1px solid #ddd; border-radius: 4px; }
+.share-create { color: #fff; background: #8e44ad; border-color: #8e44ad; }
+.share-create:hover { background: #79399a; }
+.share-message { margin: 12px 0 0; color: #409eff; font-size: 13px; }
+.share-manager-box { width: min(620px, calc(100vw - 48px)); max-width: 620px; }
+.share-list { max-height: 360px; overflow-y: auto; margin: 14px 0; border-top: 1px solid #eee; }
+.share-row { display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid #eee; }
+.share-info { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 4px; }
+.share-info strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
+.share-info span { color: #999; font-size: 12px; }
+.share-status { font-size: 12px; color: #999; white-space: nowrap; }
+.share-status.active { color: #67c23a; }
+.share-status.expired { color: #e6a23c; }
+.revoke-btn { color: #f56c6c; padding: 4px 9px; }
 </style>

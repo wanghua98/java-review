@@ -63,3 +63,12 @@ sa-token:
 server:
   port: 8001
 
+preview:
+  # 生产环境通过 PREVIEW_SIGNING_SECRET 覆盖，至少 32 字符。
+  signing-secret: ${PREVIEW_SIGNING_SECRET:local-preview-signing-secret-change-me}
+  source-base-url: ${PREVIEW_SOURCE_BASE_URL:http://localhost:8001}
+  public-base-url: ${PREVIEW_PUBLIC_BASE_URL:/preview}
+  ticket-ttl: ${PREVIEW_TICKET_TTL:2m}
+
+bootstrap:
+  admin-password: ${ADMIN_INITIAL_PASSWORD:aa}

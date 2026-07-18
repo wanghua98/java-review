@@ -1,0 +1,99 @@
+name: weektwo
+
+services:
+  mysql:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?请在 .env 中设置 MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: myapp
+      MYSQL_USER: attachment
+      MYSQL_PASSWORD: ${DB_PASSWORD:?请在 .env 中设置 DB_PASSWORD}
+      TZ: Asia/Shanghai
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./attachment-service/docs/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:?请在 .env 中设置 REDIS_PASSWORD}"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?请在 .env 中设置 REDIS_PASSWORD}
+
+  attachment-service:
+    build:
+      context: ./attachment-service
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      DB_URL: jdbc:mysql://mysql:3306/myapp?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+      DB_USERNAME: attachment
+      DB_PASSWORD: ${DB_PASSWORD:?请在 .env 中设置 DB_PASSWORD}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?请在 .env 中设置 REDIS_PASSWORD}
+      FILE_UPLOAD_PATH: /data/uploads
+      PREVIEW_SIGNING_SECRET: ${PREVIEW_SIGNING_SECRET:?请在 .env 中设置 PREVIEW_SIGNING_SECRET}
+      PREVIEW_SOURCE_BASE_URL: http://attachment-service:8001
+      PREVIEW_PUBLIC_BASE_URL: /preview
+      PREVIEW_TICKET_TTL: 2m
+      ADMIN_INITIAL_PASSWORD: ${ADMIN_INITIAL_PASSWORD:?请在 .env 中设置 ADMIN_INITIAL_PASSWORD}
+      SA_TOKEN_COOKIE_SECURE: ${SA_TOKEN_COOKIE_SECURE:-false}
+      TZ: Asia/Shanghai
+    volumes:
+      - uploaded-files:/data/uploads
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  kkfileview:
+    image: ${KKFILEVIEW_IMAGE:-keking/kkfileview:4.1.0}
+    # 官方镜像当前仅提供 amd64；Docker Desktop 会在 Apple Silicon 上自动转译。
+    platform: ${KKFILEVIEW_PLATFORM:-linux/amd64}
+    restart: unless-stopped
+    environment:
+      KK_SERVER_PORT: 8012
+      KK_CONTEXT_PATH: /preview
+      KK_BASE_URL: ${APP_PUBLIC_BASE_URL:-http://localhost:8080}/preview/
+      KK_TRUST_HOST: attachment-service
+      KK_NOT_TRUST_HOST: default
+      KK_FILE_DIR: /opt/kkfileview-cache
+      KK_CACHE_TYPE: jdk
+      KK_CACHE_CLEAN_ENABLED: "true"
+      KK_DELETE_SOURCE_FILE: "true"
+      # kkFileView 默认会在 INFO 日志中输出完整签名源 URL。
+      LOGGING_LEVEL_CN_KEKING_WEB_CONTROLLER_ONLINEPREVIEWCONTROLLER: WARN
+      TZ: Asia/Shanghai
+    volumes:
+      - kkfileview-cache:/opt/kkfileview-cache
+
+  web:
+    build:
+      context: ./annex-web
+    restart: unless-stopped
+    ports:
+      - "${HTTP_PORT:-8080}:80"
+    depends_on:
+      - attachment-service
+      - kkfileview
+
+volumes:
+  mysql-data:
+  redis-data:
+  uploaded-files:
+  kkfileview-cache:

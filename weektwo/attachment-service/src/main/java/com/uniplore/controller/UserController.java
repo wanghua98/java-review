@@ -2,6 +2,7 @@ package com.uniplore.controller;
 
 import cn.dev33.satoken.stp.StpUtil;
 import cn.hutool.core.bean.BeanUtil;
+import com.uniplore.config.LogRecord;
 import com.uniplore.pojo.UserDTO;
 import com.uniplore.pojo.UserVO;
 import com.uniplore.result.Result;
@@ -28,6 +29,7 @@ public class UserController {
      * @param userDTO 用户DTO传入用户名以及密码
      * @return 返回登陆结果
      */
+    @LogRecord("用户登录")
     @PostMapping("/login")
     public Result<String> doLogin(@RequestBody UserDTO userDTO) {
 
@@ -49,6 +51,7 @@ public class UserController {
      *
      * @return 登出结果
      */
+    @LogRecord("用户登出")
     @GetMapping("/logout")
     public Result<String> doLogout() {
         if (!StpUtil.isLogin()) {
@@ -63,6 +66,7 @@ public class UserController {
      *
      * @return 用户信息
      */
+    @LogRecord("获取用户信息")
     @GetMapping("/info")
     public Result<UserVO> getInfo() {
         // 判断用户是否登录
@@ -82,6 +86,7 @@ public class UserController {
      * @param userDTO 用户DTO传入用户名以及密码
      * @return 注册结果
      */
+    @LogRecord("用户注册")
     @PostMapping("/register")
     public Result<String> register(@RequestBody UserDTO userDTO) {
         return userService.register(userDTO);
@@ -93,6 +98,7 @@ public class UserController {
      * @param userDTO 用户DTO传入用户名以及密码
      * @return 修改结果
      */
+    @LogRecord("修改用户信息")
     @PostMapping("/changeInfo")
     public Result<String> changeInfo(@RequestBody UserDTO userDTO) {
         if (!StpUtil.isLogin()) {

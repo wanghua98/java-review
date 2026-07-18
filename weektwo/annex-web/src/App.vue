@@ -43,7 +43,7 @@ function goToFiles() {
     <!-- 顶部导航栏 -->
     <nav>
       <div class="nav-left" @click="goToFiles" style="cursor:pointer;">
-        <span class="nav-title">📁 文件管理</span>
+        <span class="nav-title">附件管理系统</span>
       </div>
       <div class="nav-right" v-if="user">
         <span class="nav-nickname" @click="goToUserInfo" title="修改个人信息">

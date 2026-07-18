@@ -14,7 +14,7 @@ import com.uniplore.result.ResultMessage;
  */
 public class ValidateUtil {
 
-    /** 文件名/目录名非法字符（Windows 禁止字符，跨平台通用） */
+    /** 文件名/目录名非法字符 */
     private static final String ILLEGAL_CHARS = "\\\\/:*?\"<>|";
 
     private ValidateUtil() {

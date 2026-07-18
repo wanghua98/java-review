@@ -73,7 +73,7 @@ public class FileChunkServiceImpl extends ServiceImpl<FileChunkMapper, FileChunk
      * 线程池，用于异步处理分片合并计算SHA256操作
      *
      */
-    private final ExecutorService executorService = new ThreadPoolExecutor(5, 5, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>(), new ThreadPoolExecutor.AbortPolicy());
+    private final ExecutorService executorService = new ThreadPoolExecutor(500, 500, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>(), new ThreadPoolExecutor.AbortPolicy());
 
     /**
      * 分片合并锁工具
@@ -125,7 +125,7 @@ public class FileChunkServiceImpl extends ServiceImpl<FileChunkMapper, FileChunk
             return Result.error(500, ResultMessage.SAVE_CHUNK_FAILED.getMessage(), null);
         }
 
-        // 分片信息暂存到 Redis Hash（合并前不再写数据库）
+        // 分片信息暂存到 Redis Hash合并前不再写数据库
         fileChunk.setChunkPath(fileChunk.getChunkNumber() + ".part");
         cacheUtil.putChunkInfo(fileChunk.getTaskId(), fileChunk);
 
@@ -182,9 +182,11 @@ public class FileChunkServiceImpl extends ServiceImpl<FileChunkMapper, FileChunk
             // 合并后的文件路径（任务ID/合并后的文件名）
             String fullPath = chunkDirPath + File.separator + mergedName;
             FileInfo fileInfo = new FileInfo();
+
             // 自动重命名：如果目标目录已存在同名文件，追加编号避免冲突
             String uniqueName = fileDirectoryService.resolveUniqueFileName(
                     uploadTask.getParentId(), uploadTask.getFileName());
+
             // 复制文件信息到 FileInfo
             BeanUtils.copyProperties(uploadTask, fileInfo);
             fileInfo.setFileName(uniqueName);
@@ -199,8 +201,7 @@ public class FileChunkServiceImpl extends ServiceImpl<FileChunkMapper, FileChunk
             uploadTask.setStatus(2);
             fileUploadTaskMapper.updateById(uploadTask);
 
-            // 等待文件信息插入成功后，异步计算 SHA-256 并与前端哈希比较
-            // 确保文件信息写入数据库，再计算哈希
+            // 等待文件信息插入成功后，异步计算 SHA-256 并与前端哈希比较验证是否损坏
             String finalStoragePath = taskId + File.separator + mergedName;
             AfterCommitRunner.afterCommit(() -> executorService.execute(() ->
                     computeAndVerifyHash(taskId, finalStoragePath, fullPath, uploadTask.getFileSha256())));
@@ -309,14 +310,14 @@ public class FileChunkServiceImpl extends ServiceImpl<FileChunkMapper, FileChunk
                 return;
             }
 
-            if (frontendHash != null && frontendHash.equals(computedHash)) {
-                // 哈希一致
+            if (frontendHash == null || frontendHash.equals(computedHash)) {
+                // 前端未传哈希或哈希一致，使用后端计算值
                 fileInfo.setFileSha256(computedHash);
                 fileInfoMapper.updateById(fileInfo);
                 task.setStatus(3);
                 log.info("文件哈希校验通过，taskId: {}, fileName: {}", taskId, fileInfo.getFileName());
             } else {
-                // 哈希不一致，文件名追加损坏标记
+                // 前端传哈希且哈希不一致，文件名追加损坏标记
                 log.warn("文件哈希校验不通过，taskId: {}, frontendHash: {}, computedHash: {}",
                         taskId, frontendHash, computedHash);
                 fileInfo.setFileName(fileInfo.getFileName() + "（文件损坏）");

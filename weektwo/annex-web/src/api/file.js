@@ -141,8 +141,8 @@ export function getDownloadUrl(fileId) {
  */
 export function getPreviewUrl(fileId, suffix) {
   // 统一使用 localhost（需要在容器内把 localhost:8001 转发到宿主机）
-  const fileUrl = `http://localhost:8001/api/file/inline/${fileId}.${suffix}`
+  const fileUrl = `http://192.168.2.42:8001/api/file/inline/${fileId}.${suffix}`
   // 标准 base64 编码并 URL 编码
   const base64 = btoa(fileUrl)
-  return `http://localhost:8012/onlinePreview?url=${encodeURIComponent(base64)}`
+  return `http://192.168.2.42:8012/onlinePreview?url=${encodeURIComponent(base64)}`
 }

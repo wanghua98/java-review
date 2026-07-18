@@ -111,7 +111,11 @@
             <artifactId>commons-fileupload</artifactId>
             <version>1.6.0</version>
         </dependency>
-
+        <!--  AOP 依赖 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-aop</artifactId>
+        </dependency>
 
     </dependencies>
 

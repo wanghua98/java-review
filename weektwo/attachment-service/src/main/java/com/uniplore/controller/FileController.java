@@ -1,6 +1,7 @@
 package com.uniplore.controller;
 
 import cn.dev33.satoken.stp.StpUtil;
+import com.uniplore.config.LogRecord;
 import com.uniplore.pojo.*;
 import com.uniplore.result.Result;
 import com.uniplore.result.ResultMessage;
@@ -71,6 +72,7 @@ public class FileController {
      * @param fileUploadTask 文件上传任务信息（含fileName、fileSha256、fileSize、chunkCount等）
      * @return 上传任务信息（含任务ID）
      */
+    @LogRecord("初始化上传任务")
     @PostMapping("/init")
     public Result<FileUploadTask> initFile(@RequestBody FileUploadTask fileUploadTask) {
         // 校验必要参数（SHA-256 可为空，大文件由后端在合并时计算）
@@ -99,6 +101,7 @@ public class FileController {
      * @param file        分片文件内容
      * @return 上传结果
      */
+    @LogRecord("上传分片")
     @PostMapping("/upload")
     public Result<String> uploadChunk(@RequestParam("taskId") String taskId,
                                       @RequestParam("chunkNumber") Integer chunkNumber,
@@ -138,6 +141,7 @@ public class FileController {
      * @param size 每页条数（默认20）
      * @return 目录文件列表
      */
+    @LogRecord("获取根目录列表")
     @GetMapping("/dir/list")
     public Result<DirectoryVO> getUserDirList(@RequestParam(value = "page", defaultValue = "1") int page,
                                                @RequestParam(value = "size", defaultValue = "20") int size) {
@@ -166,6 +170,7 @@ public class FileController {
      * @param size  每页条数（默认20）
      * @return 目录文件列表
      */
+    @LogRecord("获取目录内容")
     @GetMapping("/dir/list/{dirId}")
     public Result<DirectoryVO> getDirList(@PathVariable Long dirId,
                                           @RequestParam(value = "page", defaultValue = "1") int page,
@@ -197,6 +202,7 @@ public class FileController {
      * @param fileId 文件ID
      * @return 文件下载响应
      */
+    @LogRecord("下载文件")
     @GetMapping("/download/{fileId}")
     public ResponseEntity<Resource> downloadFile(@PathVariable Long fileId) {
 
@@ -243,6 +249,7 @@ public class FileController {
      * @param suffix 文件对应后缀
      * @return 对应文件
      */
+    @LogRecord("预览文件")
     @GetMapping("/inline/{fileId}.{suffix}")
     public ResponseEntity<Resource> inlineFile(@PathVariable Long fileId, @PathVariable(required = false) String suffix) {
 
@@ -292,6 +299,7 @@ public class FileController {
      * @param name     目录名称
      * @return 创建结果
      */
+    @LogRecord("创建目录")
     @PostMapping("/dir/create")
     public Result<FileDirectory> createDir(@RequestParam("parentId") Long parentId,
                                            @RequestParam("name") String name) {
@@ -322,6 +330,7 @@ public class FileController {
      *
      * @return 目录列表
      */
+    @LogRecord("获取所有目录")
     @GetMapping("/dir/all")
     public Result<List<FileDirectory>> getAllDirs() {
         if (!StpUtil.isLogin()) {
@@ -342,6 +351,7 @@ public class FileController {
      * @param targetDirId 目标目录ID
      * @return 移动结果
      */
+    @LogRecord("移动文件")
     @PostMapping("/move")
     public Result<String> moveFile(@RequestParam("fileId") Long fileId,
                                    @RequestParam("targetDirId") Long targetDirId) {
@@ -382,6 +392,7 @@ public class FileController {
      * @param targetDirId 目标目录ID
      * @return 移动结果
      */
+    @LogRecord("移动目录")
     @PostMapping("/dir/move/{dirId}")
     public Result<String> moveDir(@PathVariable Long dirId,
                                    @RequestParam("targetDirId") Long targetDirId) {
@@ -408,6 +419,7 @@ public class FileController {
      * @param fileId 文件ID
      * @return 删除结果
      */
+    @LogRecord("删除文件")
     @PostMapping("/delete/{fileId}")
     public Result<String> deleteFile(@PathVariable Long fileId) {
         // 检查用户是否登录
@@ -433,6 +445,7 @@ public class FileController {
      * @param dirId 目录ID
      * @return 删除结果
      */
+    @LogRecord("删除目录")
     @PostMapping("/dir/delete/{dirId}")
     public Result<String> deleteDir(@PathVariable Long dirId) {
         // 检查用户是否登录
@@ -459,6 +472,7 @@ public class FileController {
      * @param newName 新文件名（含扩展名）
      * @return 重命名结果
      */
+    @LogRecord("重命名文件")
     @PostMapping("/rename/{fileId}")
     public Result<String> renameFile(@PathVariable Long fileId,
                                      @RequestParam("newName") String newName) {
@@ -485,6 +499,7 @@ public class FileController {
      * @param newName 新目录名
      * @return 重命名结果
      */
+    @LogRecord("重命名目录")
     @PostMapping("/dir/rename/{dirId}")
     public Result<String> renameDir(@PathVariable Long dirId,
                                     @RequestParam("newName") String newName) {

@@ -27,7 +27,6 @@ async function request(path, options = {}) {
   return res.json()
 }
 
-// ==================== 导出方法 ====================
 
 /**
  * 登录

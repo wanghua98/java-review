@@ -12,8 +12,8 @@ import {setUser} from '@/stores/auth.js'
 const router = useRouter()
 
 // 表单数据
-const username = ref('admin')
-const password = ref('aa')
+const username = ref('')
+const password = ref('')
 // 提示消息
 const message = ref('')
 // 加载状态
